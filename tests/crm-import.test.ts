@@ -268,3 +268,52 @@ test("CRM-Import: ohne Überschreiben werden nur leere E-Mails nachgetragen", as
   assert.equal(row("crm:investors:a1").position, "Partner");
   assert.equal(r.contacts.updated, 1);
 });
+
+test("CRM-Import: geplante Aufgaben – Zuweisung per E-Mail, Verknüpfung, wiederholbar, Hinweis bei fehlendem Konto", async () => {
+  const { deps } = setup();
+  const dk = await addUser(deps, { email: "dk@nalpia.com", name: "Denis Keller", role: "admin", password: PW });
+  const ce = await addUser(deps, { email: "carlo@nalpia.com", name: "Carlo Elwinger", password: PW });
+  const tasks = [
+    { ref: "start:exist", title: "EXIST: Antrag einreichen", description: "Über die Hochschule", assigneeEmail: "DK@nalpia.com", dueDate: "2027-01-31", priority: "hoch" },
+    { ref: "start:arch", title: "Monorepo-Umbau", assigneeEmail: "carlo@nalpia.com", dueDate: "2027-01-15" },
+    { ref: "start:alpha", title: "Welle 1: Alpha Ventures", assigneeEmail: "dk@nalpia.com", orgRef: "crm:investor-org:alpha", priority: "niedrig" },
+    { ref: "start:byname", title: "BrokerHub anrufen", orgName: "brokerhub" },
+    { ref: "start:ghost", title: "Für jemand ohne Konto", assigneeEmail: "nobody@nalpia.com", orgName: "Gibt es nicht" },
+  ];
+  const b = parseCrmBundle(bundle({ tasks }));
+  const dry = importCrmBundle(deps.db, b, { actorId: dk, fallbackOwnerId: dk, dryRun: true });
+  assert.equal(dry.tasks.created, 5);
+  assert.equal((deps.db.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n, 0, "dry run saves nothing");
+  assert.equal((deps.db.prepare("SELECT COUNT(*) n FROM notifications").get() as { n: number }).n, 0);
+
+  const r = importCrmBundle(deps.db, b, { actorId: dk, fallbackOwnerId: dk });
+  assert.equal(r.tasks.created, 5);
+  assert.ok(r.warnings.some((w) => w.includes("nobody@nalpia.com")));
+  assert.ok(r.warnings.some((w) => w.includes("Gibt es nicht")));
+  const row = (ref: string) => deps.db.prepare("SELECT t.*, o.name org FROM tasks t LEFT JOIN organizations o ON o.id = t.organization_id WHERE t.external_ref = ?").get(`plan:${ref}`) as any;
+  assert.equal(row("start:exist").assignee_id, dk);
+  assert.equal(row("start:exist").due_date, "2027-01-31");
+  assert.equal(row("start:exist").priority, "hoch");
+  assert.equal(row("start:arch").assignee_id, ce);
+  assert.equal(row("start:arch").priority, "mittel");
+  assert.equal(row("start:alpha").org, "Alpha Ventures");
+  assert.equal(row("start:byname").org, "BrokerHub");
+  assert.equal(row("start:ghost").assignee_id, null);
+  // One notification per person (Carlo gets one; Denis imported himself and gets none)
+  const notes = deps.db.prepare("SELECT user_id FROM notifications").all() as { user_id: string }[];
+  assert.deepEqual(notes.map((n) => n.user_id), [ce]);
+
+  // Repeated import: nothing duplicated; completed tasks stay completed even with "update"
+  deps.db.prepare("UPDATE tasks SET status = 'erledigt' WHERE external_ref = 'plan:start:arch'").run();
+  const again = importCrmBundle(deps.db, parseCrmBundle(bundle({ tasks: tasks.map((t) => ({ ...t, title: t.title + " (neu)" })) })), { actorId: dk, fallbackOwnerId: dk, update: true });
+  assert.equal(again.tasks.created, 0);
+  assert.equal(again.tasks.updated, 4);
+  assert.equal(again.tasks.skipped, 1);
+  assert.equal(row("start:arch").title, "Monorepo-Umbau");
+  assert.equal(row("start:exist").title, "EXIST: Antrag einreichen (neu)");
+  assert.equal((deps.db.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n, 5);
+
+  // A bundle with only tasks is valid
+  const only = parseCrmBundle({ format: "nalpia-crm-bundle", version: 1, source: "Startaufgaben", tasks: [{ ref: "x", title: "Nur Aufgabe" }] });
+  assert.equal(importCrmBundle(deps.db, only, { actorId: dk }).tasks.created, 1);
+});

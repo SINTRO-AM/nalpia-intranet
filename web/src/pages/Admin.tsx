@@ -516,7 +516,7 @@ interface ImportResult {
   orgs: ImportCounts;
   contacts: ImportCounts;
   activities: { created: number; skipped: number };
-  tasks: { created: number; skipped: number };
+  tasks: { created: number; skipped: number; updated?: number };
   round: string;
   warnings: string[];
 }
@@ -649,7 +649,7 @@ function CrmImport() {
       <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
         <span className="font-semibold">{tr("Tasks", "Aufgaben")}</span>
         <span className="text-[13px] text-muted">
-          <b className="text-ink">{n(r.tasks?.created ?? 0)}</b> {tr("new", "neu")}{(r.tasks?.skipped ?? 0) > 0 && <>, {n(r.tasks.skipped)} {tr("already present", "schon vorhanden")}</>}
+          <b className="text-ink">{n(r.tasks?.created ?? 0)}</b> {tr("new", "neu")}{(r.tasks?.updated ?? 0) > 0 && <>, {n(r.tasks.updated ?? 0)} {tr("updated", "aktualisiert")}</>}{(r.tasks?.skipped ?? 0) > 0 && <>, {n(r.tasks.skipped)} {tr("already present", "schon vorhanden")}</>}
         </span>
       </li>
       <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
@@ -741,7 +741,7 @@ function CrmImport() {
               >
                 {tr("Cancel", "Abbrechen")}
               </Button>
-              <Button variant="primary" loading={busy} onClick={() => send(false)} disabled={!preview.orgs.created && !preview.contacts.created && !preview.activities.created && !preview.orgs.updated && !preview.contacts.updated && !preview.orgs.linked && !preview.contacts.linked && !preview.tasks?.created}>
+              <Button variant="primary" loading={busy} onClick={() => send(false)} disabled={!preview.orgs.created && !preview.contacts.created && !preview.activities.created && !preview.orgs.updated && !preview.contacts.updated && !preview.orgs.linked && !preview.contacts.linked && !preview.tasks?.created && !preview.tasks?.updated}>
                 {tr("Import", "Importieren")}
               </Button>
             </div>

@@ -175,6 +175,17 @@ docker compose exec intranet node dist/server/cli.js import-crm --file /data/inv
 
 Wiederholtes Importieren legt nichts doppelt an; Status, Zuständigkeit, Notizen und von Hand gesetzte Prioritäten bleiben erhalten (mit `--update` überschreibt das Paket). Der Import berechnet den Fit für nalpia mit.
 
+**Geplante Aufgaben im Paket:** Ein CRM-Paket kann zusätzlich eine Liste `tasks` enthalten – z. B. Startaufgaben fürs Team oder eine Outreach-Welle mit einer Aufgabe je Investor:
+
+```json
+"tasks": [
+  { "ref": "start:exist-antrag", "title": "EXIST-Antrag einreichen", "assigneeEmail": "name@nalpia.com",
+    "dueDate": "2027-01-31", "priority": "hoch", "description": "…", "orgRef": "crm:firm:…" }
+]
+```
+
+Zugewiesen wird per E-Mail an ein bestehendes Konto (auch eingeladen, noch nicht aktiviert). Der Schalter „Aufgaben aus dem CRM anlegen“ ist dafür nicht nötig – er betrifft nur Aufgaben aus der CRM-Vorgeschichte. Gibt es das Konto nicht, entsteht die Aufgabe ohne Zuständigkeit und die Vorschau zeigt einen Hinweis – also vorher alle Personen anlegen. `orgRef` (oder `orgName`) verknüpft die Aufgabe mit einer Firma. Wiederholtes Importieren legt nichts doppelt an (Referenz `plan:<ref>`); mit `--update` bzw. dem Schalter „Bereits importierte Datensätze überschreiben“ werden offene Aufgaben überschrieben, erledigte bleiben unangetastet. Jede Person erhält eine Benachrichtigung mit der Zahl ihrer neuen Aufgaben.
+
 ## Alternative ohne eigenen Server
 
 Das Image läuft auf jeder Plattform mit Docker und einem persistenten Volume (z. B. Fly.io mit Region `fra`, Render mit Disk). Wichtig: genau **eine** Instanz (SQLite, Agent-Scheduler), Volume unter `/data`, `TRUST_PROXY=true` und `APP_URL` auf die öffentliche Adresse setzen.

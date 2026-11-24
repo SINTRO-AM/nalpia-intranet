@@ -14,7 +14,7 @@ import type { DB } from "../db/index.js";
 import { getSetting, setSetting } from "../db/index.js";
 import { CONTACT_CATEGORIES, STAGES } from "../routes/contacts.js";
 import { FOCUS_IDS, ORG_KINDS, ORG_STAGES, ORG_TYPES, PRIOR_OUTCOMES, STAGE_IDS, defaultRound, getRound, refit, type OrgKind } from "../routes/orgs.js";
-import { audit } from "./audit.js";
+import { audit, notify } from "./audit.js";
 import { HttpError } from "./http.js";
 import { guessFocusTags, guessStageFocus } from "./nalpia-fit.js";
 import { mailDirection } from "./org-dashboard.js";
@@ -112,6 +112,24 @@ const activitySchema = z.object({
   mail: z.object({ messageId: z.string().max(40), folderId: z.string().max(40), subject: text(300) }).optional(),
 });
 
+/**
+ * Planned tasks (e.g. a founder team's starting tasks). Assigned by email; linked to an organization of the
+ * bundle (orgRef) or one already in the CRM (orgName). Idempotent via ref; completed tasks are never reopened.
+ */
+const planTaskSchema = z.object({
+  ref,
+  title: text(200).pipe(z.string().min(1)),
+  description: opt(8000),
+  assigneeEmail: z.string().trim().toLowerCase().max(254).optional(),
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  priority: z.enum(["hoch", "mittel", "niedrig"]).default("mittel"),
+  orgRef: z.string().max(200).optional(),
+  orgName: z.string().max(300).optional(),
+});
+
 export const crmBundleSchema = z.object({
   format: z.enum(["nalpia-crm-bundle", "sintro-crm-bundle"]),
   version: z.literal(1),
@@ -125,6 +143,7 @@ export const crmBundleSchema = z.object({
   orgs: z.array(orgSchema).max(20000).default([]),
   contacts: z.array(contactSchema).max(40000).default([]),
   activities: z.array(activitySchema).max(100000).default([]),
+  tasks: z.array(planTaskSchema).max(2000).default([]),
 });
 
 export type CrmBundle = z.infer<typeof crmBundleSchema>;
@@ -153,7 +172,7 @@ export interface ImportResult {
   orgs: Counts;
   contacts: Counts;
   activities: { created: number; skipped: number };
-  tasks: { created: number; skipped: number };
+  tasks: { created: number; skipped: number; updated?: number };
   /** Status ids (stable API values): set | unchanged | not provided */
   round: "gesetzt" | "unverändert" | "keine Angabe";
   warnings: string[];
@@ -436,6 +455,9 @@ export function importCrmBundle(db: DB, bundle: CrmBundle, opts: ImportOptions):
     /* ---------- Tasks from the CRM ---------- */
     if (opts.tasks) createTasks(db, bundle, orgIdByRef, contactIdByRef, ownerId, opts.actorId, now, res);
 
+    /* ---------- Planned tasks (explicit list in the bundle) ---------- */
+    if (bundle.tasks.length) createPlanTasks(db, bundle, orgIdByRef, opts, now, res, warnings);
+
     /* ---------- Funding round ---------- */
     if (bundle.round) {
       const cur = getRound(db);
@@ -481,13 +503,82 @@ export function describeImport(r: ImportResult) {
     `Organizations: ${c(r.orgs)}`,
     `Contacts: ${c(r.contacts)}`,
     `Activity: ${r.activities.created} new, ${r.activities.skipped} skipped`,
-    `Tasks: ${r.tasks.created} new, ${r.tasks.skipped} already present`,
+    `Tasks: ${r.tasks.created} new, ${r.tasks.updated ?? 0} updated, ${r.tasks.skipped} already present`,
     `Funding round: ${ROUND_LABEL[r.round]}`,
     r.owner ? `Owner: ${r.owner.name}` : "Owner: nobody",
     ...r.warnings.map((w) => `Note: ${w}`),
   ].join("\n");
 }
 
+
+function createPlanTasks(
+  db: DB,
+  bundle: CrmBundle,
+  orgIdByRef: Map<string, { id: string; kind: OrgKind; name: string }>,
+  opts: ImportOptions,
+  now: number,
+  res: ImportResult,
+  warnings: string[],
+) {
+  const userByEmail = db.prepare("SELECT id, name FROM users WHERE lower(email) = ? AND status != 'disabled'");
+  const orgByRefDb = db.prepare("SELECT id FROM organizations WHERE external_ref = ?");
+  const orgByName = db.prepare("SELECT id FROM organizations WHERE lower(trim(name)) = ? LIMIT 1");
+  const existing = db.prepare("SELECT id, status FROM tasks WHERE external_ref = ?");
+  const ins = db.prepare(
+    `INSERT INTO tasks (id, title, description, assignee_id, created_by, due_date, priority, status, organization_id, sort_order, created_at, updated_at, external_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'offen', ?, ?, ?, ?, ?)`,
+  );
+  const upd = db.prepare("UPDATE tasks SET title = ?, description = ?, assignee_id = ?, due_date = ?, priority = ?, organization_id = ?, updated_at = ? WHERE id = ?");
+  const missingUsers = new Set<string>();
+  const missingOrgs: string[] = [];
+  const assigned = new Map<string, number>();
+  let order = 0;
+  for (const t of bundle.tasks) {
+    const extRef = `plan:${t.ref}`;
+    const user = t.assigneeEmail ? (userByEmail.get(t.assigneeEmail) as { id: string; name: string } | undefined) : undefined;
+    if (t.assigneeEmail && !user) missingUsers.add(t.assigneeEmail);
+    let orgId: string | null = null;
+    if (t.orgRef) orgId = orgIdByRef.get(t.orgRef)?.id ?? (orgByRefDb.get(t.orgRef) as { id: string } | undefined)?.id ?? null;
+    if (!orgId && t.orgName) orgId = (orgByName.get(normName(t.orgName)) as { id: string } | undefined)?.id ?? null;
+    if ((t.orgRef || t.orgName) && !orgId) missingOrgs.push(t.orgName || t.orgRef!);
+    const desc = t.description ?? "";
+    const prev = existing.get(extRef) as { id: string; status: string } | undefined;
+    if (prev) {
+      if (opts.update && prev.status !== "erledigt") {
+        upd.run(t.title, desc, user?.id ?? null, t.dueDate ?? null, t.priority, orgId, now, prev.id);
+        res.tasks.updated = (res.tasks.updated ?? 0) + 1;
+      } else res.tasks.skipped++;
+      continue;
+    }
+    const id = newId();
+    ins.run(id, t.title, desc, user?.id ?? null, opts.actorId, t.dueDate ?? null, t.priority, orgId, order++, now, now, extRef);
+    res.tasks.created++;
+    if (user && !opts.dryRun) {
+      assigned.set(user.id, (assigned.get(user.id) ?? 0) + 1);
+    }
+  }
+  // One notification per person instead of one per task
+  for (const [userId, n] of assigned) {
+    notify(db, {
+      userId,
+      actorId: opts.actorId,
+      kind: "task.assigned",
+      title: () => tr(`${n} new task${n === 1 ? "" : "s"} assigned to you (${bundle.source || "import"})`, `${n} neue Aufgabe${n === 1 ? "" : "n"} für dich (${bundle.source || "Import"})`),
+      link: "/aufgaben",
+    });
+  }
+  if (missingUsers.size) {
+    warnings.push(
+      tr(
+        `No account for ${[...missingUsers].join(", ")} – these tasks are created without an assignee. Invite the person (Admin → People) and assign them, or import again after inviting (with “update”).`,
+        `Kein Konto für ${[...missingUsers].join(", ")} – diese Aufgaben werden ohne Zuständigkeit angelegt. Person einladen (Verwaltung → Personen) und zuweisen oder nach der Einladung erneut importieren (mit „aktualisieren“).`,
+      ),
+    );
+  }
+  if (missingOrgs.length) {
+    warnings.push(tr(`Not found in the CRM, task created without a link: ${missingOrgs.slice(0, 10).join(", ")}${missingOrgs.length > 10 ? " …" : ""}`, `Nicht im CRM gefunden, Aufgabe ohne Verknüpfung angelegt: ${missingOrgs.slice(0, 10).join(", ")}${missingOrgs.length > 10 ? " …" : ""}`));
+  }
+}
 
 /** Passive steps ("wait for reply") and pure first-outreach lists do not become tasks (matches the German CRM data too) */
 const PASSIVE_STEP = /warten|Erstansprache|\bwait|first outreach/i;
