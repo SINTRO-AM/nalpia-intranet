@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+
+# Datenbank, Backups und Seed-Daten mit echten Kontakten bleiben lokal –
+# Investoren werden über Verwaltung → Import (CRM-Paket) oder `cli import-crm` eingespielt.
+data/
+crm-paket*.json
+*-bundle.json
+*.jsonl

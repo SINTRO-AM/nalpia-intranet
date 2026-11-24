@@ -1,0 +1,11 @@
+{$INTRANET_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy intranet:8080
+	# Header für den Proxy-Betrieb; Sicherheits-Header setzt die App selbst
+	header -Server
+}
+
+# Weitere Websites auf diesem Server (z. B. die nalpia-Website aus SINTRO-AM/nalpia).
+# Jede Site liegt als Repo unter /opt/sites/<name> und bringt ihre Konfiguration in
+# deploy/site.caddy mit. Gibt es keine, passiert nichts.
+import /srv/sites/*/deploy/site.caddy

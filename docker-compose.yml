@@ -1,0 +1,44 @@
+# Produktivbetrieb: Intranet + Caddy (automatisches HTTPS über Let's Encrypt)
+# Start:  docker compose up -d --build
+services:
+  intranet:
+    build: .
+    image: nalpia-intranet:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY: "true"
+    volumes:
+      - intranet-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - intranet
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      INTRANET_DOMAIN: ${INTRANET_DOMAIN:?INTRANET_DOMAIN in .env setzen, z. B. intranet.nalpia.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      # Weitere Websites (read-only), siehe Caddyfile ganz unten
+      - /opt/sites:/srv/sites:ro
+    networks:
+      - default
+      - web
+
+networks:
+  # Gemeinsames Netz für Container weiterer Websites (z. B. PHP fürs Kontaktformular)
+  web:
+    name: nalpia-web
+
+volumes:
+  intranet-data:
+  caddy-data:
+  caddy-config:
