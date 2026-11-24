@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AvatarEditor } from "@/components/AvatarEditor";
 import { LangToggle } from "@/components/LangToggle";
+import { MailConnectForm } from "@/components/MailConnect";
 import { Select } from "@/components/pickers";
 import { Button, cx, Field, Segmented, Skeleton, Switch } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -471,23 +472,12 @@ function MailTab() {
   const status = useMailStatus().data;
   const save = usePrefsSaver();
   const [sig, setSig] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (me?.prefs && sig === null) setSig(me.prefs.signature ?? "");
   }, [me, sig]);
 
-  async function connect() {
-    setBusy(true);
-    try {
-      const { url } = await api.post<{ url: string }>("/api/mail/connect");
-      window.location.href = url;
-    } catch (e) {
-      toast.error((e as Error).message);
-      setBusy(false);
-    }
-  }
   async function disconnect() {
-    if (!window.confirm(tr("Disconnect your mailbox? The access key will be deleted and revoked at Zoho.", "Postfach-Verbindung wirklich trennen? Der Zugriffsschlüssel wird gelöscht und bei Zoho widerrufen."))) return;
+    if (!window.confirm(status?.mode === "imap" ? tr("Disconnect your mailbox? The stored mailbox password will be deleted from the intranet.", "Postfach-Verbindung wirklich trennen? Das gespeicherte Postfach-Passwort wird aus dem Intranet gelöscht.") : tr("Disconnect your mailbox? The access key will be deleted and revoked at the provider.", "Postfach-Verbindung wirklich trennen? Der Zugriffsschlüssel wird gelöscht und beim Anbieter widerrufen."))) return;
     await api.post("/api/mail/disconnect");
     qc.invalidateQueries({ queryKey: ["mail"] });
     toast(tr("Mailbox disconnected", "Postfach getrennt"));
@@ -495,9 +485,9 @@ function MailTab() {
 
   return (
     <div className="space-y-4">
-      <Card title={tr("Connection", "Verbindung")} text={tr("Your Zoho mailbox is visible only to you – admins have no access either.", "Dein Zoho-Postfach ist nur für dich sichtbar – auch Admins haben keinen Zugriff.")}>
+      <Card title={tr("Connection", "Verbindung")} text={tr("Your mailbox is visible only to you – admins have no access either.", "Dein Postfach ist nur für dich sichtbar – auch Admins haben keinen Zugriff.")}>
         {!me?.features.mail ? (
-          <p className="text-sm text-muted">{tr("The Zoho connection hasn't been set up on the server yet.", "Die Zoho-Anbindung ist auf dem Server noch nicht eingerichtet.")}</p>
+          <p className="text-sm text-muted">{tr("The mailbox connection hasn't been set up on the server yet.", "Die Postfach-Anbindung ist auf dem Server noch nicht eingerichtet.")}</p>
         ) : !status ? (
           <Skeleton className="h-12" />
         ) : status.connected ? (
@@ -515,12 +505,18 @@ function MailTab() {
               </Button>
             </div>
             {status.needsReconnect && (
-              <div className="flex items-center gap-2 rounded-xl bg-accent-soft px-3 py-2.5 text-sm">
-                <span className="flex-1">{tr("The connection has expired.", "Die Verbindung ist abgelaufen.")}</span>
-                <Button size="sm" variant="primary" onClick={connect} loading={busy}>
-                  {tr("Reconnect", "Neu verbinden")}
-                </Button>
+              <div className="space-y-2 rounded-xl bg-accent-soft px-3 py-2.5 text-sm">
+                <p>{status.mode === "imap" ? tr("The mailbox no longer accepts the stored password. Enter your current password:", "Das Postfach akzeptiert das gespeicherte Passwort nicht mehr. Gib dein aktuelles Passwort ein:") : tr("The connection has expired.", "Die Verbindung ist abgelaufen.")}</p>
+                <MailConnectForm compact status={status} />
               </div>
+            )}
+            {status.mode === "imap" && !status.needsReconnect && (
+              <details className="text-[13px]">
+                <summary className="cursor-pointer text-muted">{tr("Changed your mailbox password?", "Postfach-Passwort geändert?")}</summary>
+                <div className="mt-2">
+                  <MailConnectForm compact status={status} />
+                </div>
+              </details>
             )}
             {(status.addresses?.length ?? 0) > 1 && (
               <Field label={tr("Default sender", "Standard-Absender")} hint={tr("Other addresses (aliases) of your mailbox.", "Weitere Adressen (Aliase) deines Postfachs.")} htmlFor="m-from">
@@ -535,9 +531,7 @@ function MailTab() {
             )}
           </div>
         ) : (
-          <Button variant="primary" onClick={connect} loading={busy}>
-            {me.features.demo ? tr("Connect demo mailbox", "Demo-Postfach verbinden") : tr("Connect Zoho Mail", "Mit Zoho Mail verbinden")}
-          </Button>
+          <MailConnectForm status={status} />
         )}
       </Card>
       <Card title={tr("Signature", "Signatur")} text={tr("Added to your e-mails when sending.", "Wird beim Senden an deine Mails angehängt.")}>

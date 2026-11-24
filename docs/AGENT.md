@@ -1,6 +1,6 @@
 # Fundraising-Agent
 
-Der Agent übernimmt die Investorenansprache für die Pre-Seed-Runde: Er wählt die passendsten Investoren aus dem CRM, recherchiert sie, schreibt persönliche Erstmails im Stil von Denis, versendet sie aus dem verbundenen Zoho-Postfach, fasst nach, liest die Antworten und hält im CRM alles nach. Seite: **Agent** in der Navigation.
+Der Agent übernimmt die Investorenansprache für die Pre-Seed-Runde: Er wählt die passendsten Investoren aus dem CRM, recherchiert sie, schreibt persönliche Erstmails im Stil von Denis, versendet sie aus dem verbundenen Spacemail-Postfach, fasst nach, liest die Antworten und hält im CRM alles nach. Seite: **Agent** in der Navigation.
 
 ## Zwei Modi
 
@@ -16,7 +16,7 @@ Umschalten oben auf der Agent-Seite (Admins); der Wechsel in den Autopilot wird 
 
 ## Was der Agent voraussetzt
 
-1. **Postfach-Inhaber** (Einstellungen → „Postfach-Inhaber“): die Person, in deren Namen die Mails gehen – sie verbindet unter *Postfach* ihr Zoho-Konto. Ohne verbundenes Postfach entwirft der Agent, sendet aber nichts.
+1. **Postfach-Inhaber** (Einstellungen → „Postfach-Inhaber“): die Person, in deren Namen die Mails gehen – sie verbindet unter *Postfach* ihr Spacemail-Postfach mit ihrem Postfach-Passwort. Ohne verbundenes Postfach entwirft der Agent, sendet aber nichts.
 2. **`ANTHROPIC_API_KEY`** und `AGENT_MODEL` (Standard `claude-opus-5-5`). Ohne Schlüssel läuft der Demo-Modus: Entwürfe aus Vorlagen, keine Recherche.
 3. **Investoren im CRM** mit E-Mail-Adresse eines Ansprechpartners, Status *Identifiziert* und ausreichendem Fit (siehe unten).
 

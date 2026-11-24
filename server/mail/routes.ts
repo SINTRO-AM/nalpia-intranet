@@ -20,6 +20,24 @@ mailRoutes.post("/connect", (c) => {
   return c.json({ url: mail.authorizeUrl(c.get("user")) });
 });
 
+/** IMAP/SMTP (Spacemail): connect the own mailbox with its mailbox password. */
+mailRoutes.post("/connect-password", async (c) => {
+  const { mail, limiter } = c.get("deps");
+  const user = c.get("user");
+  const p = await body(
+    c,
+    z.object({
+      email: z.string().trim().toLowerCase().pipe(z.email(zMsg("Invalid email address", "Ungültige E-Mail-Adresse"))).optional(),
+      password: z.string().min(1, zMsg("Please enter your mailbox password.", "Bitte gib dein Postfach-Passwort ein.")).max(300),
+    }),
+  );
+  if (!limiter.take(`mail:connect:${user.id}`, 6, 15 * 60_000)) {
+    throw new HttpError(429, tr("Too many attempts. Please wait 15 minutes.", "Zu viele Versuche. Bitte warte 15 Minuten."), "rate_limited");
+  }
+  await mail.connectWithPassword(user, p, c.get("ip"));
+  return c.json(mail.status(user));
+});
+
 mailRoutes.post("/disconnect", async (c) => {
   await c.get("deps").mail.disconnect(c.get("user"), c.get("ip"));
   return c.json({ ok: true });

@@ -1,10 +1,10 @@
 # Einrichtung und Betrieb
 
-Diese Anleitung bringt das Intranet unter `https://intranet.nalpia.com` online. Rechne mit rund einer Stunde, die Zoho-Postfächer der Mitarbeitenden nicht eingerechnet. Das nalpia-Intranet ist vom SINTRO-Intranet unabhängig: eigener Server oder eigener Container, eigene Datenbank, eigene Zoho-App.
+Diese Anleitung bringt das Intranet unter `https://intranet.nalpia.com` online. Rechne mit rund einer Stunde. Das nalpia-Intranet ist vom SINTRO-Intranet unabhängig: eigener Container, eigene Datenbank, eigene Konfiguration.
 
-## 0. Vorab klären: eigenes Zoho-Postfach pro Person
+## 0. Vorab klären: eigenes Spacemail-Postfach pro Person
 
-Jede Person verbindet im Intranet **ihr eigenes** Zoho-Postfach (Domain `nalpia.com`). Das Intranet prüft beim Verbinden, dass das Zoho-Postfach zur Intranet-Adresse der Person passt. Läuft eine Adresse nur als Alias auf einem anderen Postfach, muss in der Zoho-Mail-Administration (mailadmin.zoho.eu → Benutzer) zuerst ein eigenes Benutzerkonto mit Postfach angelegt werden.
+Die Postfächer von nalpia liegen bei **Spacemail** (Spaceship). Jede Person verbindet im Intranet **ihr eigenes** Postfach (Domain `nalpia.com`) mit ihrem Postfach-Passwort – demselben wie fürs Webmail. Das Intranet prüft beim Verbinden, dass die Adresse zur Intranet-Adresse der Person passt, und testet das Passwort an IMAP und SMTP. Läuft eine Adresse nur als Weiterleitung oder Alias, muss im Spacemail Manager zuerst ein eigenes Postfach angelegt werden. IMAP/SMTP ist bei Spacemail standardmäßig eingeschaltet (Spacemail Manager → Postfach → „IMAP/POP3/SMTP“).
 
 Der **Fundraising-Agent** sendet aus dem Postfach des eingestellten Postfach-Inhabers (Standard: Denis) – dieses Postfach muss verbunden sein, bevor der Agent senden kann.
 
@@ -40,18 +40,19 @@ Pflichtwerte in `.env`:
 | `BOOTSTRAP_ADMIN_EMAIL` / `_NAME` | erste Admin-Person, z. B. `denis@nalpia.com` / `Denis Keller` |
 | `ALLOWED_EMAIL_DOMAINS` | `nalpia.com` (nur solche Adressen können eingeladen werden) |
 
-## 3. Zoho-Mail-Anbindung (einmalig, ca. 5 Minuten)
+## 3. Postfach und Kalender (Spacemail)
 
-1. Öffne die **Zoho API Console für das EU-Rechenzentrum**: https://api-console.zoho.eu (mit einem Admin-Konto der nalpia-Organisation anmelden).
-2. **Add Client → Server-based Applications**.
-3. Ausfüllen:
-   - Client Name: `nalpia Intranet`
-   - Homepage URL: `https://intranet.nalpia.com`
-   - Authorized Redirect URIs: `https://intranet.nalpia.com/api/mail/oauth/callback`
-4. **Create** → `Client ID` und `Client Secret` in `.env` eintragen (`ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`).
-5. `ZOHO_ACCOUNTS_URL=https://accounts.zoho.eu` bleibt so (EU-Rechenzentrum).
+Auf dem Server ist nichts einzutragen: Die Standardwerte zeigen auf Spacemail.
 
-Angefordert werden nur diese Berechtigungen: Konto lesen, Ordner lesen, Nachrichten lesen/senden/markieren, Kalender (`ZohoMail.accounts.READ`, `ZohoMail.folders.READ`, `ZohoMail.messages.ALL`, `ZohoCalendar.calendar.READ`, `ZohoCalendar.event.ALL`). Jede Person bestätigt den Zugriff selbst und kann ihn im Intranet (Einstellungen → Postfach → Trennen) oder unter accounts.zoho.eu → *Connected Apps* jederzeit widerrufen.
+| Dienst | Server | Port / Verschlüsselung |
+|---|---|---|
+| Posteingang (IMAP) | `mail.spacemail.com` | 993, SSL/TLS |
+| Postausgang (SMTP) | `mail.spacemail.com` | 465, SSL/TLS |
+| Kalender (CalDAV) | `https://caldav.spacemail.com` | HTTPS |
+
+Benutzername ist jeweils die vollständige E-Mail-Adresse, Passwort das Postfach-Passwort. Jede Person verbindet sich selbst unter **Postfach** (oder Einstellungen → Postfach). Ändert jemand sein Passwort bei Spacemail, zeigt das Intranet „Neu verbinden“ – dort einfach das neue Passwort eingeben.
+
+Ein anderer Anbieter: `MAIL_IMAP_HOST`, `MAIL_IMAP_PORT`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_CALDAV_URL` und `MAIL_PROVIDER_NAME` in der Konfiguration setzen. Zoho Mail per OAuth bleibt möglich (`MAIL_PROVIDER=zoho` plus `ZOHO_CLIENT_ID`/`ZOHO_CLIENT_SECRET`).
 
 ## 4. Claude API
 
@@ -68,13 +69,13 @@ Ohne Schlüssel funktioniert alles andere; der Agent entwirft dann aus Vorlagen 
 
 ## 5. System-E-Mails (optional)
 
-Für automatisch versendete Einladungen und „Passwort vergessen“: ein Postfach wie `intranet@nalpia.com` anlegen, in Zoho ein **App-Passwort** erzeugen (Mein Konto → Sicherheit → App-Passwörter) und eintragen:
+Für automatisch versendete Einladungen und „Passwort vergessen“: im Spacemail Manager ein Postfach wie `intranet@nalpia.com` anlegen und eintragen:
 
 ```
-SMTP_HOST=smtppro.zoho.eu
+SMTP_HOST=mail.spacemail.com
 SMTP_PORT=465
 SMTP_USER=intranet@nalpia.com
-SMTP_PASS=<App-Passwort>
+SMTP_PASS=<Passwort dieses Postfachs>
 SMTP_FROM="nalpia Intranet <intranet@nalpia.com>"
 ```
 
@@ -182,9 +183,9 @@ Das Image läuft auf jeder Plattform mit Docker und einem persistenten Volume (z
 
 | Problem | Lösung |
 |---|---|
-| „Das Zoho-Postfach … gehört nicht zu deinem Intranet-Konto“ | Bei Zoho mit dem eigenen Postfach anmelden. Ggf. vorher bei accounts.zoho.eu abmelden. Bei Alias-Postfächern siehe Abschnitt 0 |
-| „Zoho hat keinen dauerhaften Zugriff gewährt“ | Unter accounts.zoho.eu → Connected Apps „nalpia Intranet“ entfernen und neu verbinden |
-| Redirect-Fehler bei Zoho | Redirect URI in der API Console muss exakt `APP_URL + /api/mail/oauth/callback` sein |
+| „Spacemail hat die Anmeldung abgelehnt“ | Passwort im Spacemail-Webmail prüfen; im Spacemail Manager nachsehen, ob IMAP/SMTP für das Postfach eingeschaltet ist |
+| „Du kannst nur dein eigenes Postfach verbinden“ | Die Intranet-Adresse muss der Spacemail-Adresse entsprechen (z. B. `denis@nalpia.com`); bei Alias-Adressen siehe Abschnitt 0 |
+| „Zu viele Versuche“ | 15 Minuten warten (höchstens 6 Verbindungsversuche pro Person) |
 | Agent entwirft, sendet aber nicht | Postfach des Postfach-Inhabers verbinden (Agent-Seite zeigt den Hinweis); im Prüfmodus sendet nur der Klick; im Autopilot zählen Sendefenster und Tageslimit |
 | Agent findet keine Kandidaten | Investoren brauchen Ansprechpartner mit E-Mail, Status *Identifiziert*, Fit ≥ Mindest-Fit und ein Zielland (Standard US) – siehe Agent → Kandidaten |
 | Person gesperrt | Verwaltung → Personen → „Sperre aufheben“ oder CLI `unlock` |

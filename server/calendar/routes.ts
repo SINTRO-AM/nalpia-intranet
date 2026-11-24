@@ -91,7 +91,7 @@ calendarRoutes.delete("/events/:calendarId/:eventId", async (c) => {
   const user = c.get("user");
   const calendarId = zCalId.parse(decodeURIComponent(c.req.param("calendarId")));
   const eventId = zEventId.parse(decodeURIComponent(c.req.param("eventId")));
-  const q = query(c, z.object({ etag: z.string().max(40).default(""), recurrenceId: z.string().max(40).optional() }));
+  const q = query(c, z.object({ etag: z.string().max(200).default(""), recurrenceId: z.string().max(40).optional() }));
   await mail.calendar(user).remove(calendarId, eventId, q.etag, q.recurrenceId || null);
   forget(user.id);
   audit(db, { userId: user.id, action: "calendar.event_deleted", target: eventId, ip: c.get("ip") });

@@ -26,7 +26,7 @@ Push auf main ──► Server (alle 2 Min.): deploy/update.sh ──► docker 
    ```bash
    ssh-keygen -t ed25519 -N "" -C "hetzner nalpia-intranet" -f /root/.ssh/nalpia_intranet_deploy && cat /root/.ssh/nalpia_intranet_deploy.pub
    ```
-3. **Zoho, Claude, SMTP:** `nano /etc/nalpia-intranet/intranet.env`, dann `/opt/sites/nalpia-intranet/deploy/update.sh --force`.
+3. **Claude-Schlüssel und System-Mails (SMTP):** `nano /etc/nalpia-intranet/intranet.env`, dann `/opt/sites/nalpia-intranet/deploy/update.sh --force`.
 
 ## Im Alltag
 

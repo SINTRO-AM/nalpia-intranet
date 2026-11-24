@@ -26,6 +26,25 @@ const schema = z.object({
   BOOTSTRAP_ADMIN_NAME: z.string().optional(),
   SESSION_DAYS: z.coerce.number().int().min(1).max(90).default(14),
 
+  /**
+   * Mailbox provider: "imap" = IMAP/SMTP/CalDAV with the person's own mailbox password (Spacemail by default),
+   * "zoho" = Zoho Mail OAuth, "auto" = Zoho when its credentials are set, demo mailbox in demo mode, IMAP otherwise.
+   */
+  MAIL_PROVIDER: z.enum(["auto", "imap", "zoho"]).default("auto"),
+  MAIL_PROVIDER_NAME: z.string().default("Spacemail"),
+  MAIL_IMAP_HOST: z.string().default("mail.spacemail.com"),
+  MAIL_IMAP_PORT: z.coerce.number().int().default(993),
+  MAIL_SMTP_HOST: z.string().default("mail.spacemail.com"),
+  MAIL_SMTP_PORT: z.coerce.number().int().default(465),
+  /** TLS from the first byte (993/465); false = STARTTLS */
+  MAIL_SECURE: bool(true),
+  /** Calendar via CalDAV with the same credentials; empty = no calendar */
+  MAIL_CALDAV_URL: z.string().default("https://caldav.spacemail.com"),
+  /** Only the person's own address (or an address of an allowed domain) may be connected */
+  MAIL_ENFORCE_EMAIL_MATCH: bool(true),
+  /** Only for local tests against a server with a self-signed certificate */
+  MAIL_TLS_SELF_SIGNED: bool(false),
+
   ZOHO_CLIENT_ID: z.string().optional(),
   ZOHO_CLIENT_SECRET: z.string().optional(),
   ZOHO_ACCOUNTS_URL: z.string().default("https://accounts.zoho.eu"),
@@ -64,6 +83,7 @@ export type Config = z.infer<typeof schema> & {
   allowedDomains: string[];
   dbFile: string;
   zohoEnabled: boolean;
+  mailProvider: "zoho" | "imap" | "demo" | "off";
   aiEnabled: boolean;
   smtpEnabled: boolean;
 };
@@ -93,6 +113,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new Error("APP_URL must start with https:// in production.");
     }
   }
+  const zohoEnabled = Boolean(c.ZOHO_CLIENT_ID && c.ZOHO_CLIENT_SECRET);
+  const mailProvider: Config["mailProvider"] =
+    c.MAIL_PROVIDER === "zoho"
+      ? zohoEnabled
+        ? "zoho"
+        : "off"
+      : c.MAIL_PROVIDER === "imap"
+        ? c.MAIL_IMAP_HOST
+          ? "imap"
+          : "off"
+        : zohoEnabled
+          ? "zoho"
+          : c.DEMO_MODE
+            ? "demo"
+            : c.MAIL_IMAP_HOST
+              ? "imap"
+              : "off";
+  if (isProd && c.MAIL_TLS_SELF_SIGNED) throw new Error("MAIL_TLS_SELF_SIGNED is only allowed for local tests.");
   const secret = c.APP_SECRET ?? "dev-only-secret-change-me-dev-only-secret-change-me";
   return {
     ...c,
@@ -105,7 +143,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
     dbFile: path.resolve(c.DATA_DIR, "intranet.db"),
-    zohoEnabled: Boolean(c.ZOHO_CLIENT_ID && c.ZOHO_CLIENT_SECRET),
+    zohoEnabled,
+    mailProvider,
     aiEnabled: Boolean(c.ANTHROPIC_API_KEY),
     smtpEnabled: Boolean(c.SMTP_HOST && c.SMTP_USER && c.SMTP_PASS),
   };

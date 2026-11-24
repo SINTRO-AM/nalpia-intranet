@@ -12,12 +12,12 @@ Eigenständiges Projekt mit eigenem Repo, eigener Datenbank und eigenem Server �
 | **Partner** | Broker/Neobroker, Daten- und API-Anbieter, Börsen/Marktinfrastruktur, Regulatorik (Haftungsdach/Lizenz), Accelerator & Programme, Dienstleister – eigene Pipeline von *Identifiziert* bis *Aktiver Partner* |
 | **Kontakte** | Alle Personen: Ansprechpartner von Investoren und Partnern, Nutzer/Kunden, Bewerber, Stakeholder – mit Status, Zuständigkeit, nächstem Schritt, Verlauf (Notiz, Anruf, Meeting, E-Mail) und verknüpften Aufgaben |
 | **News / Aufgaben / Meilensteine** | Beiträge mit Kategorien, Reaktionen und Kommentaren; Aufgaben (meine/Team/Kanban) mit Kommentaren und Verknüpfungen; Meilensteine mit Fortschritt |
-| **Postfach / Kalender** | Das **eigene** Zoho-Postfach jeder Person (OAuth, nur für sie sichtbar) mit KI-Antwortentwürfen, Zusammenfassungen, Ordner „Wichtig“ (nur CRM-Kontakte); Zoho-Kalender |
+| **Postfach / Kalender** | Das **eigene** Spacemail-Postfach jeder Person (IMAP/SMTP mit eigenem Postfach-Passwort, nur für sie sichtbar) mit KI-Antwortentwürfen, Zusammenfassungen, Ordner „Wichtig“ (nur CRM-Kontakte); Spacemail-Kalender über CalDAV |
 | **Import/Export** | CRM-Paket aus dem SINTRO-CRM (`scripts/export-to-bundle.ts`), CSV-Import mit Vorschau, CSV-Export; alles wiederholbar ohne Dubletten |
 | **Team / Verwaltung** | Organigramm, Profile, Zuständigkeiten; Einladen, Rollen, 2FA-Pflicht, Reset-Links, Audit-Protokoll |
 | **Überall** | KI-Assistent je Seite, Suche und Befehle (Strg/⌘ + K), Benachrichtigungen, Hell/Dunkel, als App installierbar |
 
-## Schnell ausprobieren (Demo-Modus, ohne Zoho/Claude)
+## Schnell ausprobieren (Demo-Modus, ohne Postfach/Claude)
 
 ```bash
 npm install
@@ -33,7 +33,7 @@ Im Demo-Modus gibt es fiktive Investoren und Partner, ein Demo-Postfach pro Pers
 Ausführlich in **[docs/SETUP.md](docs/SETUP.md)**. Kurzfassung:
 
 ```bash
-cp .env.example .env        # APP_URL, APP_SECRET, Zoho, Claude, SMTP eintragen
+cp .env.example .env        # APP_URL, APP_SECRET, Claude, SMTP eintragen
 docker compose up -d --build
 docker compose exec intranet node dist/server/cli.js reset-link --email denis@nalpia.com   # Link für die erste Admin-Person
 ```
@@ -44,21 +44,22 @@ Investoren einspielen: Verwaltung → Import → CRM-Paket (`investors-bundle.js
 
 - **Backend:** Node.js 22, [Hono](https://hono.dev), SQLite (better-sqlite3, WAL), Zod-Validierung
 - **Frontend:** React 18, Vite, Tailwind CSS, TanStack Query, Radix UI, vaul (Bottom-Sheets), Sofia Sans
-- **Postfach:** Zoho Mail REST API (EU-Rechenzentrum), OAuth 2.0 je Person, Tokens AES-256-GCM-verschlüsselt
+- **Postfach:** Spacemail über IMAP (imapflow), SMTP (nodemailer) und CalDAV (tsdav, ical.js); Postfach-Passwort je Person AES-256-GCM-verschlüsselt. Zoho Mail (OAuth) bleibt als Alternative wählbar
 - **KI:** Anthropic Claude API – Agent `claude-opus-5-5`, Assistent `claude-opus-5-5`, Mail-Entwürfe `claude-sonnet-5-5`, Übersetzung `claude-haiku-5-5`; Recherche über das Web-Search-Tool der API
 - **Betrieb:** ein Docker-Container + Caddy (automatisches HTTPS); Daten in einem Volume (`/data`)
 
 ```
-server/            API, Auth, Datenbank, Zoho- und Claude-Anbindung
+server/            API, Auth, Datenbank, Postfach- und Claude-Anbindung
   agent/           Fundraising-Agent: Einstellungen, Kandidaten, Entwürfe, Versand, Posteingang, Scheduler
   ai/              Mail-Entwürfe, Assistent, Übersetzung
   auth/            Login, Sitzungen, Einladungen, 2FA
   lib/nalpia-fit.ts  Fit-Modell für Investoren
-  mail/            Zoho-OAuth, Postfach-Client, Demo-Postfach
+  mail/            IMAP/SMTP-Postfach (Spacemail), Zoho-OAuth (Alternative), Demo-Postfach
+  calendar/        CalDAV-Kalender (Spacemail), Zoho-Kalender, Demo-Kalender
   routes/          News, Aufgaben, Meilensteine, Kontakte, Investoren/Partner, Team, Verwaltung
 scripts/           export-to-bundle.ts (SINTRO-CRM-Export → CRM-Paket), research-to-bundle.ts (Recherche-Liste → CRM-Paket)
 web/src/           Oberfläche (Seiten, Komponenten, Layout)
-tests/             Integrationstests (node:test) inkl. simuliertem Zoho-Server und Agent-Durchlauf
+tests/             Integrationstests (node:test) inkl. simuliertem Zoho-Server, IMAP/SMTP/CalDAV gegen echte Testserver (optional) und Agent-Durchlauf
 docs/              Einrichtung, Agent, Sicherheit, Kurzanleitung fürs Team
 ```
 

@@ -41,6 +41,7 @@ sweep.unref();
 function shutdown() {
   console.log("[intranet] shutting down …");
   deps.agent.stopScheduler();
+  deps.mail.close();
   server.close(() => {
     deps.db.close();
     process.exit(0);

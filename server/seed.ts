@@ -212,7 +212,7 @@ export async function seedDemo(deps: Deps) {
     ["Write the waitlist launch post", "", "leo", 4, "niedrig", "offen", "waitlist", null, "denis"],
     ["Prepare the case study for applicant Paul Riedel", "", "carlo", 6, "mittel", "offen", null, "paul", "carlo"],
     ["Feedback call with beta user Anna", "", "leo", 2, "mittel", "offen", "waitlist", "anna", "leo"],
-    ["Set up Zoho mailboxes for the team", "", "carlo", 1, "hoch", "erledigt", null, null, "denis"],
+    ["Set up Spacemail mailboxes for the team", "", "carlo", 1, "hoch", "erledigt", null, null, "denis"],
   ];
   tasks.forEach((t, i) => {
     const done = t[5] === "erledigt";
@@ -229,7 +229,7 @@ export async function seedDemo(deps: Deps) {
     [
       "denis",
       "Welcome to the nalpia intranet",
-      "From today, **news, tasks, milestones, investors, partners and your mailbox** come together in one place.\n\nHow to get started:\n\n1. Complete your profile (role, phone number, responsibilities)\n2. Connect your own Zoho mailbox under *Mail* – only you can see your e-mails\n3. Turn on two-factor authentication in the settings\n\nThe fundraising agent lives under *Agent*: it researches investors, drafts personal first mails and tracks replies. In review mode nothing leaves the house before one of us has looked at it.",
+      "From today, **news, tasks, milestones, investors, partners and your mailbox** come together in one place.\n\nHow to get started:\n\n1. Complete your profile (role, phone number, responsibilities)\n2. Connect your own Spacemail mailbox under *Mail* – only you can see your e-mails\n3. Turn on two-factor authentication in the settings\n\nThe fundraising agent lives under *Agent*: it researches investors, drafts personal first mails and tracks replies. In review mode nothing leaves the house before one of us has looked at it.",
       "allgemein",
       1,
       2,

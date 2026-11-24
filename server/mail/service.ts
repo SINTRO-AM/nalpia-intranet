@@ -8,11 +8,13 @@ import { MockMailbox } from "./mock.js";
 import { MailError, type MailboxClient, type MailFolder } from "./types.js";
 import { calendarApiFor, MockCalendar, ZohoCalendar, type CalendarClient } from "../calendar/calendar.js";
 import { resolveEndpoints, zohoAccountInfo, ZohoMailbox, zohoRevoke, zohoToken, ZOHO_SCOPES } from "./zoho.js";
+import { ImapMailbox, ImapPool, verifyImapLogin, type ImapSettings } from "./imap.js";
+import { CaldavCalendar } from "../calendar/caldav.js";
 import { tr } from "../lib/i18n.js";
 
 interface AccountRow {
   user_id: string;
-  provider: "zoho" | "demo";
+  provider: "zoho" | "demo" | "imap";
   account_id: string;
   email: string;
   display_name: string;
@@ -26,9 +28,15 @@ interface AccountRow {
   connected_at: number;
 }
 
+export type MailMode = "zoho" | "imap" | "demo" | "off";
+
 export interface MailStatus {
   available: boolean;
-  mode: "zoho" | "demo" | "off";
+  mode: MailMode;
+  /** Display name of the mail provider (e.g. "Spacemail") */
+  providerName: string;
+  /** IMAP: whether a calendar is available via CalDAV */
+  calendar: boolean;
   connected: boolean;
   email?: string;
   displayName?: string;
@@ -49,6 +57,7 @@ export class MailService {
   private mockCalendars = new Map<string, MockCalendar>();
   private folderCache = new Map<string, { at: number; folders: MailFolder[] }>();
   private unreadCache = new Map<string, { at: number; n: number }>();
+  private imapPool: ImapPool | null = null;
 
   constructor(
     private db: DB,
@@ -57,10 +66,33 @@ export class MailService {
     private fetchImpl: typeof fetch = fetch,
   ) {}
 
-  get mode(): "zoho" | "demo" | "off" {
-    if (this.config.zohoEnabled) return "zoho";
-    if (this.config.DEMO_MODE) return "demo";
-    return "off";
+  get mode(): MailMode {
+    return this.config.mailProvider;
+  }
+
+  get providerName() {
+    return this.mode === "zoho" ? "Zoho Mail" : this.mode === "imap" ? this.config.MAIL_PROVIDER_NAME : this.mode === "demo" ? "Demo" : "";
+  }
+
+  get imapSettings(): ImapSettings {
+    return {
+      imapHost: this.config.MAIL_IMAP_HOST,
+      imapPort: this.config.MAIL_IMAP_PORT,
+      smtpHost: this.config.MAIL_SMTP_HOST,
+      smtpPort: this.config.MAIL_SMTP_PORT,
+      secure: this.config.MAIL_SECURE,
+      allowSelfSigned: this.config.MAIL_TLS_SELF_SIGNED,
+    };
+  }
+
+  private get pool() {
+    this.imapPool ??= new ImapPool(this.imapSettings);
+    return this.imapPool;
+  }
+
+  /** Closes idle IMAP connections (server shutdown, tests). */
+  close() {
+    this.imapPool?.closeAll();
   }
 
   get available() {
@@ -77,7 +109,12 @@ export class MailService {
 
   status(user: UserRow): MailStatus {
     const r = this.row(user.id);
-    const base = { available: this.available, mode: this.mode };
+    const base = {
+      available: this.available,
+      mode: this.mode,
+      providerName: this.providerName,
+      calendar: this.mode === "imap" ? !!this.config.MAIL_CALDAV_URL : this.mode !== "off",
+    };
     if (!r) return { ...base, connected: false };
     return {
       ...base,
@@ -90,8 +127,54 @@ export class MailService {
     };
   }
 
+  /**
+   * IMAP/SMTP (Spacemail): connects the signed-in user's own mailbox with its mailbox password.
+   * The login is checked against IMAP and SMTP first; the password is stored encrypted.
+   */
+  async connectWithPassword(user: UserRow, input: { email?: string; password: string }, ip: string) {
+    if (this.mode !== "imap") throw new MailError(tr("This server connects mailboxes via the provider's sign-in, not with a password.", "Dieser Server verbindet Postfächer über die Anmeldung beim Anbieter, nicht mit Passwort."), "disabled", 400);
+    const email = (input.email || user.email).trim().toLowerCase();
+    if (this.config.MAIL_ENFORCE_EMAIL_MATCH && email !== user.email.toLowerCase()) {
+      audit(this.db, { userId: user.id, action: "mail.connect_mismatch", ip, meta: { email } });
+      throw new MailError(
+        tr(`You can only connect your own mailbox (${user.email}).`, `Du kannst nur dein eigenes Postfach verbinden (${user.email}).`),
+        "mismatch",
+        403,
+      );
+    }
+    try {
+      await verifyImapLogin(this.imapSettings, { user: email, pass: input.password });
+    } catch (e) {
+      audit(this.db, { userId: user.id, action: "mail.connect_failed", ip, meta: { provider: "imap", reason: e instanceof MailError ? e.code : "error" } });
+      if (e instanceof MailError && e.code === "reconnect") {
+        throw new MailError(
+          tr(
+            `${this.providerName} rejected the sign-in. Please check the password of ${email} (the one you use for webmail) and whether IMAP/SMTP is enabled for the mailbox.`,
+            `${this.providerName} hat die Anmeldung abgelehnt. Bitte prüfe das Passwort von ${email} (dasselbe wie für das Webmail) und ob IMAP/SMTP für das Postfach eingeschaltet ist.`,
+          ),
+          "denied",
+          400,
+        );
+      }
+      throw e;
+    }
+    this.pool.drop(user.id);
+    this.store(user, {
+      provider: "imap",
+      accountId: email,
+      email,
+      displayName: user.name,
+      addresses: [email],
+      accountsServer: `${this.config.MAIL_IMAP_HOST}:${this.config.MAIL_IMAP_PORT}`,
+      mailApi: `${this.config.MAIL_SMTP_HOST}:${this.config.MAIL_SMTP_PORT}`,
+      refresh: input.password,
+    });
+    audit(this.db, { userId: user.id, action: "mail.connected", ip, meta: { provider: "imap", email } });
+  }
+
   /** Starts the OAuth flow and returns the Zoho sign-in URL. */
   authorizeUrl(user: UserRow): string {
+    if (this.mode === "imap") throw new MailError(tr("Connect your mailbox with your mailbox password.", "Verbinde dein Postfach mit deinem Postfach-Passwort."), "invalid", 400);
     if (this.mode === "off") throw new MailError(tr("The mailbox integration is not set up yet (Zoho credentials are missing).", "Die Postfach-Anbindung ist noch nicht eingerichtet (Zoho-Zugangsdaten fehlen)."), "disabled", 503);
     const state = randomToken(24);
     const now = Date.now();
@@ -183,7 +266,7 @@ export class MailService {
   private store(
     user: UserRow,
     a: {
-      provider: "zoho" | "demo";
+      provider: "zoho" | "demo" | "imap";
       accountId: string;
       email: string;
       displayName: string;
@@ -234,6 +317,7 @@ export class MailService {
         /* best effort */
       }
     }
+    if (r.provider === "imap") this.imapPool?.drop(user.id);
     this.db.prepare("DELETE FROM mail_accounts WHERE user_id = ?").run(user.id);
     this.mocks.delete(user.id);
     this.folderCache.delete(user.id);
@@ -290,6 +374,18 @@ export class MailService {
       }
       return m;
     }
+    if (r.provider === "imap") {
+      if (this.mode !== "imap") throw new MailError(tr("The IMAP integration is not configured on the server.", "Die IMAP-Anbindung ist auf dem Server nicht konfiguriert."), "disabled", 503);
+      if (r.needs_reconnect) throw new MailError(tr("Your mailbox password has changed or was rejected. Please connect your mailbox again.", "Dein Postfach-Passwort hat sich geändert oder wurde abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 401);
+      return new ImapMailbox({
+        key: user.id,
+        pool: this.pool,
+        settings: this.imapSettings,
+        cred: { user: r.account_id, pass: this.vault.decrypt(r.refresh_token_enc) },
+        displayName: r.display_name || user.name,
+        onReconnectNeeded: () => this.markReconnect(user.id),
+      });
+    }
     if (this.mode !== "zoho") throw new MailError(tr("The Zoho integration is not configured on the server.", "Die Zoho-Anbindung ist auf dem Server nicht konfiguriert."), "disabled", 503);
     return new ZohoMailbox({
       accountId: r.account_id,
@@ -303,7 +399,7 @@ export class MailService {
   /** The signed-in user's calendar (same Zoho sign-in as the mailbox). */
   calendar(user: UserRow): CalendarClient {
     const r = this.row(user.id);
-    if (!r) throw new MailError(tr("Connect your mailbox first – the calendar uses the same Zoho sign-in.", "Verbinde zuerst dein Postfach – der Kalender nutzt dieselbe Zoho-Anmeldung."), "not_connected", 409);
+    if (!r) throw new MailError(tr("Connect your mailbox first – the calendar uses the same sign-in.", "Verbinde zuerst dein Postfach – der Kalender nutzt dieselbe Anmeldung."), "not_connected", 409);
     if (r.provider === "demo") {
       let c = this.mockCalendars.get(user.id);
       if (!c) {
@@ -311,6 +407,17 @@ export class MailService {
         this.mockCalendars.set(user.id, c);
       }
       return c;
+    }
+    if (r.provider === "imap") {
+      if (!this.config.MAIL_CALDAV_URL) throw new MailError(tr("No calendar server is configured.", "Es ist kein Kalenderserver eingerichtet."), "disabled", 503);
+      if (r.needs_reconnect) throw new MailError(tr("Please connect your mailbox again – the calendar uses the same password.", "Bitte verbinde dein Postfach neu – der Kalender nutzt dasselbe Passwort."), "reconnect", 401);
+      return new CaldavCalendar({
+        serverUrl: this.config.MAIL_CALDAV_URL,
+        cred: { user: r.account_id, pass: this.vault.decrypt(r.refresh_token_enc) },
+        email: r.email,
+        onReconnectNeeded: () => this.markReconnect(user.id),
+        fetch: this.fetchImpl,
+      });
     }
     if (this.mode !== "zoho") throw new MailError(tr("The Zoho integration is not configured on the server.", "Die Zoho-Anbindung ist auf dem Server nicht konfiguriert."), "disabled", 503);
     return new ZohoCalendar({ api: calendarApiFor(r.mail_api), email: r.email, token: (force) => this.accessToken(user.id, !!force), fetch: this.fetchImpl });

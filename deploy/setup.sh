@@ -66,11 +66,12 @@ ALLOWED_EMAIL_DOMAINS=nalpia.com
 SESSION_DAYS=14
 DEMO_MODE=false
 
-# Zoho Mail (API Console EU, Redirect URI: https://$DOMAIN/api/mail/oauth/callback)
-ZOHO_CLIENT_ID=
-ZOHO_CLIENT_SECRET=
-ZOHO_ACCOUNTS_URL=https://accounts.zoho.eu
-ZOHO_ENFORCE_EMAIL_MATCH=true
+# Postfach & Kalender: Spacemail (IMAP/SMTP/CalDAV) – jede Person verbindet sich unter "Postfach"
+# mit ihrem eigenen Postfach-Passwort. Standardwerte für Spacemail, nur bei anderem Anbieter ändern.
+MAIL_PROVIDER=imap
+MAIL_IMAP_HOST=mail.spacemail.com
+MAIL_SMTP_HOST=mail.spacemail.com
+MAIL_CALDAV_URL=https://caldav.spacemail.com
 
 # Claude API – ohne Schlüssel laufen Agent und Assistent nur mit Vorlagen
 ANTHROPIC_API_KEY=
@@ -82,7 +83,7 @@ AGENT_SCHEDULER=true
 AGENT_TZ=Europe/Berlin
 
 # System-E-Mails (optional)
-SMTP_HOST=smtppro.zoho.eu
+SMTP_HOST=mail.spacemail.com
 SMTP_PORT=465
 SMTP_USER=
 SMTP_PASS=
@@ -161,7 +162,7 @@ cat <<TXT
 $(printf '\033[32m')Fertig.$(printf '\033[0m') Caddy antwortet lokal für $DOMAIN (HTTP $code; 308 = Weiterleitung auf HTTPS ist korrekt).
 Sobald der DNS-Eintrag "intranet → $(hostname -I | awk '{print $1}')" greift, holt Caddy das Zertifikat: https://$DOMAIN
 
-Zoho, Claude-Schlüssel und SMTP:  nano $ENV_FILE   danach  $SITE_DIR/deploy/update.sh --force
+Claude-Schlüssel und System-Mails (SMTP):  nano $ENV_FILE   danach  $SITE_DIR/deploy/update.sh --force
 Logs:       journalctl -u nalpia-intranet-update -n 50   ·   docker logs --tail 100 nalpia-intranet
 Sicherung:  /var/backups/nalpia-intranet (täglich 03:27, 14 Tage)
 TXT

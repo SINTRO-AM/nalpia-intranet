@@ -53,7 +53,7 @@ function MailPreview() {
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface2 text-muted">
             <Inbox className="h-5 w-5" />
           </span>
-          <p className="min-w-0 flex-1 text-sm text-muted">{tr("Connect your Zoho mailbox. Only you can see your mail.", "Verbinde dein Zoho-Postfach. Nur du siehst deine Mails.")}</p>
+          <p className="min-w-0 flex-1 text-sm text-muted">{tr(`Connect your mailbox (${status.providerName}). Only you can see your mail.`, `Verbinde dein Postfach (${status.providerName}). Nur du siehst deine Mails.`)}</p>
           <Button size="sm" variant="primary" onClick={() => navigate("/postfach")}>
             {tr("Connect", "Verbinden")}
           </Button>

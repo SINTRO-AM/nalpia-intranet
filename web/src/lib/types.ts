@@ -477,7 +477,9 @@ export interface MailMessage extends MailSummary {
 
 export interface MailStatus {
   available: boolean;
-  mode: "zoho" | "demo" | "off";
+  mode: "zoho" | "imap" | "demo" | "off";
+  providerName: string;
+  calendar: boolean;
   connected: boolean;
   email?: string;
   displayName?: string;

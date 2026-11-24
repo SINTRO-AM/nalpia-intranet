@@ -7,7 +7,7 @@
 1. **Einladung öffnen** und ein Passwort festlegen (mind. 10 Zeichen, gern ein Satz aus mehreren Wörtern).
 2. **Einstellungen → Sicherheit → Zwei-Faktor-Anmeldung:** QR-Code mit der Authenticator-App scannen, Code eingeben, Wiederherstellungscodes sicher ablegen.
 3. **Einstellungen → Profil:** Profilfoto hochladen, Rolle, Telefon, Standort und Zuständigkeiten eintragen.
-4. **Postfach → Mit Zoho Mail verbinden:** bei Zoho mit dem eigenen Postfach anmelden und zustimmen. Nur du siehst dein Postfach. Klappt das Verbinden in der Home-Bildschirm-App nicht, verbinde einmal im normalen Browser.
+4. **Postfach verbinden:** unter *Postfach* dein Spacemail-Passwort eingeben (dasselbe wie fürs Webmail) und auf „Verbinden“ tippen. Das Intranet prüft es am Mailserver und speichert es verschlüsselt. Nur du siehst dein Postfach; der Kalender ist damit automatisch mit verbunden.
 5. **Einstellungen → Postfach:** Signatur hinterlegen. Unter **KI-Stil** legst du fest, wie Mail-Entwürfe klingen sollen.
 
 ## Im Alltag
@@ -69,7 +69,8 @@ Alle Personen an einem Ort: Ansprechpartner von Investoren und Partnern, Nutzer/
 
 - **Ordner „Wichtig“:** direkt unter dem Posteingang – nur Mails von Investoren, Partnern und Kontakten aus dem CRM (erkannt an Adresse oder Firmendomain). Wer im CRM fehlt, erscheint nicht.
 - **KI im Postfach:** bis zu drei Antwortvorschläge beim Öffnen einer Mail, KI-Assistent im Entwurf („Dienstag 15 Uhr vorschlagen“, „kürzer“, „auf Englisch“). Gesendet wird nur, wenn du selbst auf „Senden“ tippst.
-- **Kalender:** Navigation → Kalender zeigt deine Zoho-Kalender (Tag, Woche, Monat, Liste); Termine anlegen und löschen direkt im Intranet. Wer das Postfach vor der Kalender-Funktion verbunden hat, klickt einmal auf „Mit Zoho neu verbinden“.
+- **Kalender:** Navigation → Kalender zeigt deine Spacemail-Kalender (Tag, Woche, Monat, Liste); Termine anlegen und löschen direkt im Intranet. Bei Serienterminen löscht „Löschen“ nur den einen Termin.
+- **Passwort bei Spacemail geändert?** Das Intranet zeigt dann „Neu verbinden“ – neues Passwort eingeben, fertig.
 
 ## Team und Organigramm
 

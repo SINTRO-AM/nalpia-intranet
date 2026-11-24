@@ -309,7 +309,7 @@ function Composer({ defaults }: { defaults: ComposeDefaults }) {
       }
       qc.invalidateQueries({ queryKey: ["mail", "list"] });
       qc.invalidateQueries({ queryKey: ["mail", "list-inf"] });
-      toast.success(mode === "draft" ? tr("Saved as a draft in Zoho", "Als Entwurf in Zoho gespeichert") : tr("Sent", "Gesendet"), { description: subject || to.join(", ") });
+      toast.success(mode === "draft" ? tr("Saved as a draft in your mailbox", "Als Entwurf in deinem Postfach gespeichert") : tr("Sent", "Gesendet"), { description: subject || to.join(", ") });
       close("compose");
     } catch (e) {
       setCountdown(null);

@@ -13,7 +13,7 @@
 Admins verwalten Zugänge, haben aber **keinen Weg in fremde Postfächer**:
 
 - **Erneute Bestätigung:** Reset-Links für aktive Konten, 2FA-Reset, Rollen- und Statusänderungen, neue Admins und die 2FA-Pflicht verlangen eine frische Bestätigung mit Passwort **und** 2FA-Code (gültig 10 Minuten). Wer selbst keine 2FA hat, kann diese Aktionen nicht ausführen.
-- **Reset trennt das Postfach:** Wird ein Passwort über einen Link neu gesetzt oder die 2FA durch einen Admin zurückgesetzt, trennt das Intranet die Zoho-Verbindung und widerruft das Token. Wer das Konto danach nutzt, muss sich bei Zoho mit dem Postfach-Passwort neu anmelden – ein Admin, der einen Reset-Link selbst einlöst, sieht also keine Mails.
+- **Reset trennt das Postfach:** Wird ein Passwort über einen Link neu gesetzt oder die 2FA durch einen Admin zurückgesetzt, trennt das Intranet die Postfach-Verbindung und löscht das gespeicherte Postfach-Passwort. Wer das Konto danach nutzt, muss das Postfach-Passwort neu eingeben – ein Admin, der einen Reset-Link selbst einlöst, sieht also keine Mails.
 - **Kein heimlicher Reset:** Mit eingerichtetem SMTP gehen Reset-Links ausschließlich an die betroffene Person, nicht an den Admin. Die Person wird zusätzlich in-App (und bei 2FA-Reset per E-Mail) informiert.
 - **Deaktivieren** beendet alle Sitzungen, entwertet offene Links und trennt das Postfach.
 
@@ -24,7 +24,7 @@ Admins verwalten Zugänge, haben aber **keinen Weg in fremde Postfächer**:
 - **Eingaben:** alle API-Eingaben werden mit Zod validiert, Anfragen sind auf 1 MB begrenzt, SQL ausschließlich über Prepared Statements.
 - **Inhalte:** Beiträge werden als Markdown ohne HTML gerendert. Links nur `http(s)`, `mailto`, `tel` und interne Pfade.
 - **E-Mails anzeigen:** E-Mail-HTML wird mit DOMPurify bereinigt und in einem Sandbox-iframe **ohne Skriptausführung** dargestellt, zusätzlich mit einer eigenen Content-Security-Policy (`default-src 'none'`). Externe Bilder (Tracking-Pixel) sind standardmäßig blockiert und werden nur auf Klick geladen. Links öffnen in neuem Tab ohne Referrer.
-- **OAuth-Fehler:** Der Zoho-Rückruf gibt nur feste Fehlercodes an die Oberfläche weiter, keinen frei formulierten Text.
+- **Postfach-Anmeldung:** Höchstens 6 Verbindungsversuche pro Person in 15 Minuten; fehlgeschlagene Versuche stehen im Audit-Protokoll (ohne Passwort).
 - **Konfiguration:** Der Demo-Modus (öffentlich bekannte Demo-Passwörter) lässt sich produktiv nicht starten; produktiv sind `https://` und ein `APP_SECRET` mit mindestens 32 Zeichen Pflicht.
 
 ## Investoren, Partner und Profilfotos
@@ -36,11 +36,11 @@ Admins verwalten Zugänge, haben aber **keinen Weg in fremde Postfächer**:
 
 ## Postfach: jede Person sieht nur ihr eigenes
 
-- Jede Person verbindet ihr Zoho-Postfach selbst per OAuth. Es gibt **keinen** Endpunkt, der eine fremde Person oder ein fremdes Konto adressiert. Alle Postfach-Anfragen laufen mit dem Token der angemeldeten Person, auch bei Admins.
-- Beim Verbinden muss die Adresse des Zoho-Postfachs zur Intranet-Adresse passen (`ZOHO_ENFORCE_EMAIL_MATCH=true`), sonst wird der Zugriff verworfen und das Token bei Zoho widerrufen.
-- Refresh- und Access-Tokens liegen **AES-256-GCM-verschlüsselt** in der Datenbank (Schlüssel aus `APP_SECRET`). Der vom Zoho-Rückruf gelieferte Accounts-Server wird gegen die Liste der offiziellen Zoho-Rechenzentren geprüft.
-- **Mail-Inhalte werden nicht gespeichert.** Sie werden bei Bedarf live von Zoho geladen. Ausnahme: Was eine Person bewusst „im Kontaktverlauf speichert“, liegt danach im CRM und ist für das Team sichtbar.
-- Trennen löscht die Verbindung und widerruft das Token bei Zoho. Das passiert automatisch auch bei Passwort-Reset, 2FA-Reset durch Admins und beim Deaktivieren eines Kontos.
+- Jede Person verbindet ihr Spacemail-Postfach selbst mit ihrem Postfach-Passwort (IMAP/SMTP, TLS auf Port 993/465; Kalender über CalDAV/HTTPS). Es gibt **keinen** Endpunkt, der eine fremde Person oder ein fremdes Konto adressiert. Alle Postfach-Anfragen laufen mit den Zugangsdaten der angemeldeten Person, auch bei Admins.
+- Verbunden werden kann nur die eigene Intranet-Adresse (`MAIL_ENFORCE_EMAIL_MATCH=true`). Das Passwort wird vor dem Speichern an IMAP und SMTP geprüft; ein falsches Passwort wird nicht gespeichert.
+- Das Postfach-Passwort liegt **AES-256-GCM-verschlüsselt** in der Datenbank (Schlüssel aus `APP_SECRET`, nicht in der Datenbank). Es verlässt den Server nie und erscheint weder in Logs noch im Audit-Protokoll. Wer Datenbank **und** `APP_SECRET` erlangt, kann die Passwörter entschlüsseln – deshalb `APP_SECRET` getrennt sichern und Backups verschlüsselt ablegen. Lehnt der Mailserver das Passwort ab (z. B. nach einer Änderung), markiert das Intranet die Verbindung als „neu verbinden“, statt es weiter zu versuchen.
+- **Mail-Inhalte werden nicht gespeichert.** Sie werden bei Bedarf live vom Mailserver geladen. Ausnahme: Was eine Person bewusst „im Kontaktverlauf speichert“, liegt danach im CRM und ist für das Team sichtbar.
+- Trennen löscht die Verbindung samt gespeichertem Passwort. Das passiert automatisch auch bei Passwort-Reset, 2FA-Reset durch Admins und beim Deaktivieren eines Kontos.
 
 ## KI-Funktionen (Claude)
 
@@ -53,7 +53,7 @@ Admins verwalten Zugänge, haben aber **keinen Weg in fremde Postfächer**:
 
 - **Prüfmodus ist Standard:** Erstmails, Follow-ups und Antworten warten als Entwurf, bis eine Person auf „Senden“ klickt. Der Wechsel in den **Autopilot** ist Admins vorbehalten, wird bestätigt und protokolliert. Ein manueller Lauf („Jetzt Entwürfe erzeugen“, „Alles ausführen“, CLI) sendet im Prüfmodus nie.
 - Im Autopilot sendet der Agent nur im Sendefenster, bis zum Tageslimit und bis zur Obergrenze offener Threads; Antworten auf Fragen und Einwände warten immer auf eine Person. Ein Entwurf ohne belegten persönlichen Absatz wird nie gesendet.
-- Gesendet wird ausschließlich über das verbundene Zoho-Postfach des eingestellten Postfach-Inhabers mit dessen OAuth-Token – es gibt keinen Agent-eigenen Mailzugang. Trennt die Person ihr Postfach, steht der Agent still.
+- Gesendet wird ausschließlich über das verbundene Spacemail-Postfach des eingestellten Postfach-Inhabers mit dessen Zugangsdaten – es gibt keinen Agent-eigenen Mailzugang. Trennt die Person ihr Postfach, steht der Agent still.
 - Investor-Mails (eingehend) gehen zur Klassifizierung und für den Antwortentwurf an die Anthropic API; für die Recherche nutzt das Modell das Web-Search-Tool der API mit dem Namen des Investors (öffentliche Quellen). Inhalte eingehender Mails sind für das Modell Daten, keine Anweisungen.
 - Entwürfe, gesendete Mails, klassifizierte Antworten und Läufe liegen in der Datenbank (Backups). Jeder Versand steht im Audit-Protokoll (Empfängerdomain, keine Inhalte).
 
@@ -72,7 +72,7 @@ an (z. B. monatlich oder vor einer Prüfung).
 ## Datenschutz-Checkliste für den Produktivstart
 
 - [ ] Hosting in der EU (z. B. Hetzner Deutschland), AV-Vertrag mit dem Hoster
-- [ ] AV-Verträge mit Zoho (besteht für Zoho Mail meist schon) und Anthropic
+- [ ] AV-Verträge mit Spaceship (Spacemail) und Anthropic
 - [ ] Eintrag ins Verzeichnis der Verarbeitungstätigkeiten (Intranet, Mitarbeiterdaten, CRM-Kontakte)
 - [ ] Kurze Information an die Mitarbeitenden (Kurzanleitung unter docs/BENUTZUNG.md)
 - [ ] 2FA-Pflicht aktivieren

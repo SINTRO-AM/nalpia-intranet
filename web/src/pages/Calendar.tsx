@@ -23,6 +23,7 @@ import { Sheet, useIsDesktop } from "@/components/Sheet";
 import { Button, cx, EmptyState, Field, IconButton, Segmented, Skeleton, Switch } from "@/components/ui";
 import { api, ApiError, qs } from "@/lib/api";
 import { useMailStatus } from "@/lib/queries";
+import { MailConnectForm } from "@/components/MailConnect";
 import { dfLocale, tr } from "@/lib/i18n";
 
 /* ---------- Types ---------- */
@@ -160,7 +161,7 @@ export function CalendarPage() {
       <EmptyState
         icon={<CalendarDays className="h-5 w-5" />}
         title={tr("Connect calendar", "Kalender verbinden")}
-        text={tr("The calendar uses your Zoho sign-in. Connect your mailbox first – calendars and events are then added automatically.", "Der Kalender nutzt deine Zoho-Anmeldung. Verbinde zuerst dein Postfach – Kalender und Termine kommen dann automatisch dazu.")}
+        text={tr(`The calendar uses your ${status.data?.providerName || "mailbox"} sign-in. Connect your mailbox first – calendars and events are then added automatically.`, `Der Kalender nutzt deine ${status.data?.providerName || "Postfach"}-Anmeldung. Verbinde zuerst dein Postfach – Kalender und Termine kommen dann automatisch dazu.`)}
         action={
           <Link to="/postfach" className="inline-flex h-10 items-center rounded-xl bg-brand px-4 text-sm font-semibold text-brand-ink">
             {tr("Go to Mail", "Zum Postfach")}
@@ -227,7 +228,7 @@ function CalendarView() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[28px] font-extrabold tracking-[-0.025em]">{tr("Calendar", "Kalender")}</h1>
-          <p className="text-[14px] text-muted">{tr("Your events from Zoho Calendar.", "Deine Termine aus Zoho Calendar.")}</p>
+          <p className="text-[14px] text-muted">{tr("Your events from your mailbox calendar.", "Deine Termine aus dem Kalender deines Postfachs.")}</p>
         </div>
         <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => newAt(view === "tag" ? cursor : new Date())} disabled={!cals.data?.some((c) => c.canWrite)}>
           {tr("New event", "Neuer Termin")}
@@ -300,31 +301,13 @@ function CalendarView() {
 }
 
 function CalendarError({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
-  const [busy, setBusy] = useState(false);
   if (error.code === "reconnect" || error.status === 409)
     return (
       <EmptyState
         icon={<Lock className="h-5 w-5" />}
         title={tr("Grant calendar access", "Kalender freigeben")}
         text={error.message}
-        action={
-          <Button
-            variant="primary"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const r = await api.post<{ url: string }>("/api/mail/connect");
-                window.location.href = r.url;
-              } catch (e) {
-                toast.error((e as Error).message);
-                setBusy(false);
-              }
-            }}
-          >
-            {tr("Reconnect with Zoho", "Mit Zoho neu verbinden")}
-          </Button>
-        }
+        action={<MailConnectForm compact />}
       />
     );
   return <EmptyState icon={<CalendarDays className="h-5 w-5" />} title={tr("Calendar unavailable", "Kalender nicht erreichbar")} text={error.message} action={<Button onClick={onRetry}>{tr("Try again", "Erneut versuchen")}</Button>} />;
@@ -806,7 +789,7 @@ function EventEditor({ draft, calendars, onClose }: { draft: Draft | null; calen
             checked={f.notify}
             onChange={(v) => up({ notify: v })}
             label={tr("Send invitation by e-mail", "Einladung per E-Mail senden")}
-            description={tr("Zoho sends the attendees an invitation. When off, the event is only added to your calendar.", "Zoho schickt den Teilnehmenden eine Einladung. Ausgeschaltet steht der Termin nur in deinem Kalender.")}
+            description={tr("The mail server sends the attendees an invitation (if it supports this). When off, the event is only added to your calendar.", "Der Mailserver schickt den Teilnehmenden eine Einladung (sofern er das unterstützt). Ausgeschaltet steht der Termin nur in deinem Kalender.")}
           />
         )}
         <Field label={tr("Description", "Beschreibung")} htmlFor="ev-desc">

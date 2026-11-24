@@ -14,7 +14,7 @@
  *
  * Review mode (default): nothing leaves the mailbox without a click in the UI.
  * Autopilot: the agent sends on its own; the user still sees everything under /agent.
- * Every mail goes out through the owner's own connected mailbox (Zoho) – the agent has no
+ * Every mail goes out through the owner's own connected mailbox (Spacemail via IMAP/SMTP) – the agent has no
  * mail account of its own.
  */
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";

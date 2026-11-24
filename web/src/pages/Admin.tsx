@@ -494,7 +494,7 @@ function OrgSettings() {
         {!me?.user?.totpEnabled && <p className="mt-2 text-[12.5px] text-muted">{tr("Set up two-factor authentication for yourself first (Settings → Security).", "Richte zuerst selbst die Zwei-Faktor-Anmeldung ein (Einstellungen → Sicherheit).")}</p>}
       </section>
       <section className="card divide-y divide-line px-5 py-2">
-        {row(tr("Zoho Mail connection", "Zoho-Mail-Anbindung"), !!me?.features.mail, me?.features.demo ? tr("Demo mode active", "Demo-Modus aktiv") : tr("ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET in the server configuration", "ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET in der Server-Konfiguration"))}
+        {row(tr("Mailbox connection", "Postfach-Anbindung"), !!me?.features.mail, me?.features.demo ? tr("Demo mode active", "Demo-Modus aktiv") : tr("IMAP/SMTP (Spacemail: mail.spacemail.com) – each person connects with their own mailbox password", "IMAP/SMTP (Spacemail: mail.spacemail.com) – jede Person verbindet sich mit ihrem eigenen Postfach-Passwort"))}
         {row(tr("AI drafts (Claude)", "KI-Entwürfe (Claude)"), !!me?.features.ai, tr("ANTHROPIC_API_KEY in the server configuration", "ANTHROPIC_API_KEY in der Server-Konfiguration"))}
         {row(tr("System e-mails (SMTP)", "System-E-Mails (SMTP)"), !!me?.features.smtp, tr("For invites and “Forgot password”. Without SMTP, links are passed on manually.", "Für Einladungen und „Passwort vergessen“. Ohne SMTP werden Links manuell weitergegeben."))}
       </section>

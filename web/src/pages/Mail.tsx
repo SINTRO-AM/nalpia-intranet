@@ -36,6 +36,7 @@ import { Avatar, Button, cx, EmptyState, IconButton, Pill, Skeleton } from "@/co
 import { api, ApiError, qs } from "@/lib/api";
 import { bytes, CONTACT_CATEGORIES, dateTime, mailTime, orgHref } from "@/lib/format";
 import { useOverlays } from "@/lib/overlays";
+import { MailConnectForm } from "@/components/MailConnect";
 import { IMPORTANT_FOLDER, patchMailInLists, useImportantMail, useMailFolders, useMailListInfinite, useMailMessage, useMailStatus, useMe, useUserMap, useContactMeta } from "@/lib/queries";
 import type { ContactLookup, MailFolder, MailMessage, MailSummary, MailSummaryAI, ReplySuggestions } from "@/lib/types";
 import { tr } from "@/lib/i18n";
@@ -88,7 +89,7 @@ export function MailPage() {
       <EmptyState
         icon={<MailIcon className="h-5 w-5" />}
         title={tr("Mailbox connection not set up yet", "Postfach-Anbindung noch nicht eingerichtet")}
-        text={tr("An admin needs to add the Zoho credentials (ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET) on the server. The instructions are in the setup documentation.", "Eine Admin-Person muss auf dem Server die Zoho-Zugangsdaten (ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET) hinterlegen. Die Anleitung steht in der Setup-Dokumentation.")}
+        text={tr("An admin needs to configure the mail server on the server (MAIL_IMAP_HOST / MAIL_SMTP_HOST). The instructions are in the setup documentation.", "Eine Admin-Person muss auf dem Server den Mailserver einrichten (MAIL_IMAP_HOST / MAIL_SMTP_HOST). Die Anleitung steht in der Setup-Dokumentation.")}
       />
     );
   if (status.isLoading) return <Skeleton className="h-96" />;
@@ -117,19 +118,10 @@ const OAUTH_ERRORS = (): Record<string, string> => ({
 });
 
 function ConnectMailbox({ error: errorCode }: { error: string | null }) {
-  const error = errorCode ? (OAUTH_ERRORS()[errorCode] ?? tr("Connecting to Zoho failed. Please try again.", "Die Verbindung mit Zoho ist fehlgeschlagen. Bitte versuche es erneut.")) : null;
+  const error = errorCode ? (OAUTH_ERRORS()[errorCode] ?? tr("Connecting the mailbox failed. Please try again.", "Die Verbindung mit dem Postfach ist fehlgeschlagen. Bitte versuche es erneut.")) : null;
   const me = useMe().data;
-  const [busy, setBusy] = useState(false);
-  async function connect() {
-    setBusy(true);
-    try {
-      const { url } = await api.post<{ url: string }>("/api/mail/connect");
-      window.location.href = url;
-    } catch (e) {
-      toast.error((e as Error).message);
-      setBusy(false);
-    }
-  }
+  const status = useMailStatus().data;
+  const provider = status?.providerName || "Spacemail";
   return (
     <div className="mx-auto max-w-xl py-4">
       <div className="card overflow-hidden">
@@ -152,18 +144,22 @@ function ConnectMailbox({ error: errorCode }: { error: string | null }) {
             </li>
             <li className="flex gap-3">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
-              <span>{tr("Mail content isn't stored in the intranet; it's loaded live from Zoho. The access key is stored encrypted on the server.", "Mail-Inhalte werden nicht im Intranet gespeichert, sondern live von Zoho geladen. Der Zugangsschlüssel liegt verschlüsselt auf dem Server.")}</span>
+              <span>
+                {status?.mode === "imap"
+                  ? tr(`Mail content isn't stored in the intranet; it's loaded live from ${provider}. Your mailbox password is stored encrypted on the server.`, `Mail-Inhalte werden nicht im Intranet gespeichert, sondern live von ${provider} geladen. Dein Postfach-Passwort liegt verschlüsselt auf dem Server.`)
+                  : tr(`Mail content isn't stored in the intranet; it's loaded live from ${provider}. The access key is stored encrypted on the server.`, `Mail-Inhalte werden nicht im Intranet gespeichert, sondern live von ${provider} geladen. Der Zugangsschlüssel liegt verschlüsselt auf dem Server.`)}
+              </span>
             </li>
             <li className="flex gap-3">
               <X className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
-              <span>{tr("You can disconnect at any time in Settings. If your password is reset, the intranet disconnects automatically.", "Du kannst die Verbindung jederzeit in den Einstellungen trennen. Wird dein Passwort zurückgesetzt, trennt das Intranet sie automatisch.")}</span>
+              <span>{tr("You can disconnect at any time in Settings. If your intranet password is reset, the intranet disconnects automatically.", "Du kannst die Verbindung jederzeit in den Einstellungen trennen. Wird dein Intranet-Passwort zurückgesetzt, trennt das Intranet sie automatisch.")}</span>
             </li>
           </ul>
           {error && <p className="rounded-xl bg-neg-soft px-3 py-2.5 text-sm font-medium text-neg">{error}</p>}
-          <Button variant="primary" size="lg" className="w-full" loading={busy} onClick={connect}>
-            {me?.features.demo ? tr("Connect demo mailbox", "Demo-Postfach verbinden") : tr("Connect with Zoho Mail", "Mit Zoho Mail verbinden")}
-          </Button>
-          <p className="text-center text-[12.5px] text-muted">{tr("You'll be redirected to Zoho to sign in with your own mailbox.", "Du wirst zu Zoho weitergeleitet und meldest dich dort mit deinem eigenen Postfach an.")}</p>
+          <MailConnectForm status={status} />
+          {status && status.mode !== "imap" && status.mode !== "demo" && (
+            <p className="text-center text-[12.5px] text-muted">{tr(`You'll be redirected to ${provider} to sign in with your own mailbox.`, `Du wirst zu ${provider} weitergeleitet und meldest dich dort mit deinem eigenen Postfach an.`)}</p>
+          )}
         </div>
       </div>
     </div>
@@ -367,22 +363,17 @@ function Mailbox() {
 }
 
 function ReconnectBanner() {
-  const [busy, setBusy] = useState(false);
+  const status = useMailStatus().data;
   return (
-    <div className="flex items-center gap-2 bg-accent-soft px-3 py-2.5 text-[13px]">
-      <span className="flex-1">{tr("The connection to Zoho has expired.", "Die Verbindung zu Zoho ist abgelaufen.")}</span>
-      <Button
-        size="sm"
-        variant="primary"
-        loading={busy}
-        onClick={async () => {
-          setBusy(true);
-          const { url } = await api.post<{ url: string }>("/api/mail/connect");
-          window.location.href = url;
-        }}
-      >
-        {tr("Reconnect", "Neu verbinden")}
-      </Button>
+    <div className="flex flex-wrap items-center gap-2 bg-accent-soft px-3 py-2.5 text-[13px]">
+      <span className="flex-1">
+        {status?.mode === "imap"
+          ? tr(`${status.providerName} no longer accepts the stored password. Enter your current mailbox password:`, `${status.providerName} akzeptiert das gespeicherte Passwort nicht mehr. Gib dein aktuelles Postfach-Passwort ein:`)
+          : tr("The connection to your mailbox has expired.", "Die Verbindung zu deinem Postfach ist abgelaufen.")}
+      </span>
+      <div className={status?.mode === "imap" ? "w-full" : ""}>
+        <MailConnectForm compact status={status} />
+      </div>
     </div>
   );
 }
