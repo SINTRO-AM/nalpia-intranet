@@ -1,0 +1,30 @@
+# nalpia Intranet auf dem Hetzner-Server – ein Container, SQLite im Ordner /var/lib/nalpia-intranet.
+# Gestartet von deploy/update.sh mit:
+#   docker compose -p nalpia-intranet --env-file /etc/nalpia-intranet/intranet.env -f deploy/docker-compose.yml up -d
+# Geheimnisse und Konfiguration: /etc/nalpia-intranet/intranet.env (erzeugt von deploy/setup.sh, nur root).
+
+name: nalpia-intranet
+
+services:
+  intranet:
+    image: nalpia-intranet:current
+    pull_policy: never
+    build:
+      context: ..
+    container_name: nalpia-intranet
+    restart: unless-stopped
+    env_file:
+      - /etc/nalpia-intranet/intranet.env
+    environment:
+      TRUST_PROXY: "true"
+      DATA_DIR: /data
+    volumes:
+      - /var/lib/nalpia-intranet:/data
+    security_opt: [no-new-privileges:true]
+    networks: [caddy]
+
+networks:
+  # Netz des Caddy aus dem SINTRO-Intranet-Stack, damit er intranet.nalpia.com an "nalpia-intranet" weiterreicht
+  caddy:
+    external: true
+    name: ${CADDY_NETWORK}

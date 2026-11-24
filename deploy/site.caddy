@@ -1,0 +1,48 @@
+# nalpia Intranet – https://intranet.nalpia.com
+#
+# Wird vom Caddy des SINTRO-Intranet-Stacks (/opt/sintro-intranet) importiert:
+#   import /srv/sites/*/deploy/site.caddy
+# Das Repo liegt auf dem Server unter /opt/sites/nalpia-intranet. Das Intranet läuft als eigener
+# Container "nalpia-intranet" (eigene Datenbank, eigenes Volume) im Netz des Caddy und hört auf Port 8080.
+# Sicherheits-Header (CSP, HSTS …) setzt die App selbst.
+#
+# DNS bei Spaceship: A-Eintrag Host "intranet" → IP des Servers. Caddy holt das Zertifikat selbst.
+
+intranet.nalpia.com {
+	encode zstd gzip
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	# CRM-Import (bis 16 MB) und Profilfotos brauchen mehr als die Standardgröße
+	request_body {
+		max_size 20MB
+	}
+
+	reverse_proxy nalpia-intranet:8080 {
+		lb_try_duration 10s
+		fail_duration 5s
+	}
+
+	handle_errors {
+		@down expression `{err.status_code} in [502, 503, 504]`
+		handle @down {
+			header Cache-Control "no-store"
+			respond "Das nalpia-Intranet wird gerade aktualisiert. Bitte in einer Minute neu laden." 503
+		}
+		handle {
+			respond "{err.status_code} {err.status_text}" {err.status_code}
+		}
+	}
+
+	log {
+		output file /data/logs/intranet.nalpia.com.log {
+			roll_size 10MiB
+			roll_keep 14
+			roll_keep_for 336h
+		}
+		format console
+	}
+}
