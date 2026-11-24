@@ -51,6 +51,13 @@ if ! compose build --pull; then
   echo "$after" > .deploy-blocked
   exit 1
 fi
+# Until November 2026 the service was called "intranet" (a name the SINTRO intranet uses in the shared Caddy
+# network). A container from that time is replaced, so the name can no longer be resolved to nalpia.
+old_service="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' nalpia-intranet 2>/dev/null || true)"
+if [[ -n "$old_service" && "$old_service" != "nalpia-intranet" ]]; then
+  log "Ersetze alten Container (Dienstname \"$old_service\")"
+  docker rm -f nalpia-intranet >/dev/null
+fi
 if ! compose up -d --remove-orphans; then
   log "FEHLER: Start von ${after:0:7} fehlgeschlagen (Logs: docker logs --tail 100 nalpia-intranet)"
   echo "$after" > .deploy-blocked

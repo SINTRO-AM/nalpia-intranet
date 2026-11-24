@@ -6,7 +6,10 @@
 name: nalpia-intranet
 
 services:
-  intranet:
+  # The service name is also a DNS name in the Caddy network shared with the SINTRO intranet.
+  # Never call it "intranet": that is the SINTRO intranet's name there, and Caddy would send
+  # intranet.sintro.eu to this container (happened in November 2026).
+  nalpia-intranet:
     image: nalpia-intranet:current
     pull_policy: never
     build:
@@ -21,7 +24,9 @@ services:
     volumes:
       - /var/lib/nalpia-intranet:/data
     security_opt: [no-new-privileges:true]
-    networks: [caddy]
+    networks:
+      caddy:
+        aliases: [nalpia-intranet]
 
 networks:
   # Netz des Caddy aus dem SINTRO-Intranet-Stack, damit er intranet.nalpia.com an "nalpia-intranet" weiterreicht

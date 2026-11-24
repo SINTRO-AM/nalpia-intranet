@@ -1,7 +1,7 @@
 # intranet.nalpia.com auf dem Hetzner-Server
 
 Gleiches Muster wie nalpia.com und app.nalpia.com: Der Caddy aus dem SINTRO-Intranet-Stack liefert aus und holt
-das HTTPS-Zertifikat. Das nalpia-Intranet läuft daneben in einem **eigenen** Container mit eigener Datenbank
+das HTTPS-Zertifikat. Das nalpia-Intranet läuft daneben in einem **eigenen** Container („nalpia-intranet“ – nie „intranet“ nennen, das ist der Name des SINTRO-Intranets im gemeinsamen Caddy-Netz) mit eigener Datenbank
 (`/var/lib/nalpia-intranet`) und eigener Konfiguration (`/etc/nalpia-intranet/intranet.env`) – vom SINTRO-Intranet
 getrennt. Ein Timer holt alle 2 Minuten den neuesten Stand von `main`, baut auf dem Server und startet neu.
 
