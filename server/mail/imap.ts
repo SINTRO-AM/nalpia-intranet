@@ -99,7 +99,7 @@ function translateError(e: unknown): never {
   if (e instanceof MailError) throw e;
   const err = e as { authenticationFailed?: boolean; responseText?: string; code?: string; message?: string };
   if (err?.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|authentication failed/i.test(`${err?.responseText ?? ""} ${err?.message ?? ""}`)) {
-    throw new MailError(tr("The mailbox rejected the password. Please connect your mailbox again with the current password.", "Das Postfach hat das Passwort abgelehnt. Bitte verbinde dein Postfach mit dem aktuellen Passwort neu."), "reconnect", 401);
+    throw new MailError(tr("The mailbox rejected the password. Please connect your mailbox again with the current password.", "Das Postfach hat das Passwort abgelehnt. Bitte verbinde dein Postfach mit dem aktuellen Passwort neu."), "reconnect", 409);
   }
   if (err?.code === "ENOTFOUND" || err?.code === "ECONNREFUSED" || err?.code === "ETIMEDOUT") {
     throw new MailError(tr("The mail server cannot be reached right now. Please try again in a moment.", "Der Mailserver ist gerade nicht erreichbar. Bitte versuche es gleich noch einmal."), "upstream", 502);
@@ -217,7 +217,7 @@ export async function verifyImapLogin(settings: ImapSettings, cred: ImapCredenti
   } catch (e) {
     const err = e as { code?: string; responseCode?: number };
     if (err.code === "EAUTH" || err.responseCode === 535) {
-      throw new MailError(tr("Reading works, but the outgoing server (SMTP) rejected the password.", "Lesen klappt, aber der Postausgangsserver (SMTP) hat das Passwort abgelehnt."), "reconnect", 401);
+      throw new MailError(tr("Reading works, but the outgoing server (SMTP) rejected the password.", "Lesen klappt, aber der Postausgangsserver (SMTP) hat das Passwort abgelehnt."), "reconnect", 409);
     }
     throw new MailError(tr("The outgoing server (SMTP) cannot be reached: ", "Der Postausgangsserver (SMTP) ist nicht erreichbar: ") + ((e as Error).message ?? ""), "upstream", 502);
   } finally {
@@ -445,7 +445,7 @@ export class ImapMailbox implements MailboxClient {
       const err = e as { code?: string; responseCode?: number; message?: string };
       if (err.code === "EAUTH" || err.responseCode === 535) {
         this.o.onReconnectNeeded();
-        throw new MailError(tr("The outgoing server rejected the password. Please connect your mailbox again.", "Der Postausgangsserver hat das Passwort abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 401);
+        throw new MailError(tr("The outgoing server rejected the password. Please connect your mailbox again.", "Der Postausgangsserver hat das Passwort abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 409);
       }
       if (err.code === "EENVELOPE") throw new MailError(tr("A recipient address was rejected: ", "Eine Empfängeradresse wurde abgelehnt: ") + (err.message ?? ""), "invalid", 400);
       throw new MailError(tr("Sending failed: ", "Senden fehlgeschlagen: ") + escapeHtml(err.message ?? ""), "upstream", 502);

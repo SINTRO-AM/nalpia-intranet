@@ -78,9 +78,13 @@ export class CaldavCalendar implements CalendarClient {
     } catch {
       throw new MailError(tr("The calendar server cannot be reached right now.", "Der Kalenderserver ist gerade nicht erreichbar."), "upstream", 502);
     }
-    if (res.status === 401 || res.status === 403) {
-      this.o.onReconnectNeeded();
-      throw new MailError(tr("The calendar server rejected the password. Please connect your mailbox again.", "Der Kalenderserver hat das Passwort abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 401);
+    // Only the calendar is affected: the mailbox keeps working, so it is not marked for reconnecting.
+    // (Never answer 401 – for the interface that means "signed out".)
+    if (res.status === 401) {
+      throw new MailError(tr("The calendar server rejected the sign-in. Your mailbox keeps working; if you changed your password, connect your mailbox again.", "Der Kalenderserver hat die Anmeldung abgelehnt. Dein Postfach funktioniert weiter; falls du dein Passwort geändert hast, verbinde dein Postfach neu."), "reconnect", 409);
+    }
+    if (res.status === 403) {
+      throw new MailError(tr("The calendar server denied access (403).", "Der Kalenderserver verweigert den Zugriff (403)."), "upstream", 502);
     }
   }
 
@@ -237,10 +241,8 @@ export class CaldavCalendar implements CalendarClient {
     }
     root.addSubcomponent(ve);
     const res = await client.createCalendarObject({ calendar: cal, filename: `${uid.split("@")[0]}.ics`, iCalString: root.toString() });
-    if (res.status === 401 || res.status === 403) {
-      this.o.onReconnectNeeded();
-      throw new MailError(tr("The calendar server rejected the password.", "Der Kalenderserver hat das Passwort abgelehnt."), "reconnect", 401);
-    }
+    if (res.status === 401) throw new MailError(tr("The calendar server rejected the sign-in.", "Der Kalenderserver hat die Anmeldung abgelehnt."), "reconnect", 409);
+    if (res.status === 403) throw new MailError(tr("The calendar server denied access (403).", "Der Kalenderserver verweigert den Zugriff (403)."), "upstream", 502);
     if (!res.ok) throw new MailError(tr("The event could not be created (calendar server: ", "Der Termin konnte nicht angelegt werden (Kalenderserver: ") + `${res.status}).`, "upstream", 502);
     const url = new URL(`${uid.split("@")[0]}.ics`, cal.url.endsWith("/") ? cal.url : cal.url + "/").toString();
     const etag = res.headers.get("etag") ?? "";

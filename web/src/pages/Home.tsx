@@ -28,9 +28,10 @@ function groupTasks(tasks: Task[]) {
 
 function MailPreview() {
   const status = useMailStatus().data;
-  const folders = useMailFolders(!!status?.connected).data;
+  const mailOk = !!status?.connected && !status.needsReconnect;
+  const folders = useMailFolders(mailOk).data;
   const inbox = folders?.find((f) => f.type === "inbox");
-  const list = useMailList(inbox?.id, "", !!status?.connected && !!inbox);
+  const list = useMailList(inbox?.id, "", mailOk && !!inbox);
   const navigate = useNavigate();
   const me = useMe().data;
   if (!me?.features.mail) return null;

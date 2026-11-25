@@ -201,7 +201,8 @@ test("IMAP: connect with mailbox password, read, mark, reply, draft", { skip: !l
   deps.db.prepare("UPDATE mail_accounts SET refresh_token_enc = ?").run(deps.vault.encrypt("altes-passwort"));
   deps.mail.close();
   const stale = await c.get(`/api/mail/messages?folderId=${inbox.id}`);
-  assert.equal(stale.status, 401, stale.text);
+  assert.equal(stale.status, 409, stale.text);
+  assert.equal(stale.json.code, "reconnect");
   st = await c.get("/api/mail/status");
   assert.equal(st.json.needsReconnect, true);
   const again = await c.post("/api/mail/connect-password", { password: "geheim-123" });

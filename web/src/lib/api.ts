@@ -49,7 +49,9 @@ async function request<T>(method: string, url: string, body?: unknown, opts: { s
     }
   }
   if (!res.ok) {
-    if (res.status === 401 && !url.startsWith("/api/auth/")) unauthListeners.forEach((l) => l());
+    // Only the server's "not signed in" answer ends the session in the interface – never an error of the
+    // mailbox, calendar or another connected service that happens to use 401.
+    if (res.status === 401 && data.code === "unauthenticated" && !url.startsWith("/api/auth/")) unauthListeners.forEach((l) => l());
     throw new ApiError(
       res.status,
       typeof data.error === "string" ? data.error : tr(`Error ${res.status}`, `Fehler ${res.status}`),

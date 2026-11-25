@@ -376,7 +376,7 @@ export class MailService {
     }
     if (r.provider === "imap") {
       if (this.mode !== "imap") throw new MailError(tr("The IMAP integration is not configured on the server.", "Die IMAP-Anbindung ist auf dem Server nicht konfiguriert."), "disabled", 503);
-      if (r.needs_reconnect) throw new MailError(tr("Your mailbox password has changed or was rejected. Please connect your mailbox again.", "Dein Postfach-Passwort hat sich geändert oder wurde abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 401);
+      if (r.needs_reconnect) throw new MailError(tr("Your mailbox password has changed or was rejected. Please connect your mailbox again.", "Dein Postfach-Passwort hat sich geändert oder wurde abgelehnt. Bitte verbinde dein Postfach neu."), "reconnect", 409);
       return new ImapMailbox({
         key: user.id,
         pool: this.pool,
@@ -410,7 +410,7 @@ export class MailService {
     }
     if (r.provider === "imap") {
       if (!this.config.MAIL_CALDAV_URL) throw new MailError(tr("No calendar server is configured.", "Es ist kein Kalenderserver eingerichtet."), "disabled", 503);
-      if (r.needs_reconnect) throw new MailError(tr("Please connect your mailbox again – the calendar uses the same password.", "Bitte verbinde dein Postfach neu – der Kalender nutzt dasselbe Passwort."), "reconnect", 401);
+      if (r.needs_reconnect) throw new MailError(tr("Please connect your mailbox again – the calendar uses the same password.", "Bitte verbinde dein Postfach neu – der Kalender nutzt dasselbe Passwort."), "reconnect", 409);
       return new CaldavCalendar({
         serverUrl: this.config.MAIL_CALDAV_URL,
         cred: { user: r.account_id, pass: this.vault.decrypt(r.refresh_token_enc) },
