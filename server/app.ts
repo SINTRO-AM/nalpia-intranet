@@ -23,6 +23,7 @@ import { milestoneRoutes } from "./routes/milestones.js";
 import { miscRoutes } from "./routes/misc.js";
 import { newsRoutes } from "./routes/news.js";
 import { taskRoutes } from "./routes/tasks.js";
+import { topicRoutes } from "./routes/topics.js";
 import { userRoutes } from "./routes/users.js";
 import { teamRoutes } from "./routes/team.js";
 
@@ -128,6 +129,7 @@ export function createApp(deps: Deps, opts: { staticDir?: string } = {}) {
   authed.route("/", teamRoutes);
   authed.route("/news", newsRoutes);
   authed.route("/tasks", taskRoutes);
+  authed.route("/topics", topicRoutes);
   authed.route("/milestones", milestoneRoutes);
   authed.route("/contacts", contactRoutes);
   authed.route("/orgs", orgRoutes);

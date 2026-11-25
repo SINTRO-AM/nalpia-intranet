@@ -1,6 +1,6 @@
 # nalpia Intranet
 
-Internes Web-Portal der nalpia GmbH (i. G.) – Fundraising-CRM mit KI-Agent, Partner-Pipeline, Aufgaben, Meilensteine, Postfach, Kalender und Team. Optimiert fürs Handy, voll nutzbar am Desktop, zweisprachig (Deutsch/Englisch).
+Internes Web-Portal der nalpia GmbH (i. G.) – Fundraising-CRM mit KI-Agent, Partner-Pipeline, Aufgaben, Themen-Pipeline, Meilensteine, Postfach, Kalender und Team. Optimiert fürs Handy, voll nutzbar am Desktop, zweisprachig (Deutsch/Englisch).
 
 Eigenständiges Projekt mit eigenem Repo, eigener Datenbank und eigenem Server – unabhängig vom SINTRO-Intranet, dessen Aufbau als Vorlage diente.
 
@@ -11,7 +11,8 @@ Eigenständiges Projekt mit eigenem Repo, eigener Datenbank und eigenem Server �
 | **Agent** | Fundraising-Agent (Claude Opus 5.5): wählt Kandidaten, recherchiert den Investor, schreibt persönliche Erstmails im Stil von Denis, sendet aus dem verbundenen Postfach, fasst nach (5/9 Tage), liest Antworten, klassifiziert sie (Ja/Frage/Absage/OOO/Bounce) und entwirft Antworten. **Standard ist der Prüfmodus:** nichts geht ohne Klick raus. Optional Autopilot mit Sendefenster und Tageslimit. Details: [docs/AGENT.md](docs/AGENT.md) |
 | **Partner** | Broker/Neobroker, Daten- und API-Anbieter, Börsen/Marktinfrastruktur, Regulatorik (Haftungsdach/Lizenz), Accelerator & Programme, Dienstleister – eigene Pipeline von *Identifiziert* bis *Aktiver Partner* |
 | **Kontakte** | Alle Personen: Ansprechpartner von Investoren und Partnern, Nutzer/Kunden, Bewerber, Stakeholder – mit Status, Zuständigkeit, nächstem Schritt, Verlauf (Notiz, Anruf, Meeting, E-Mail) und verknüpften Aufgaben |
-| **News / Aufgaben / Meilensteine** | Beiträge mit Kategorien, Reaktionen und Kommentaren; Aufgaben (meine/Team/Kanban) mit Kommentaren und Verknüpfungen; Meilensteine mit Fortschritt |
+| **News / Aufgaben / Meilensteine** | Beiträge mit Kategorien, Reaktionen und Kommentaren; Aufgaben (meine/Team/Kanban mit Offen – In Arbeit – Wartet – Erledigt) mit Schnelleingabe (`@person #thema !hoch morgen`), Sammelaktionen, Checklisten, Verlauf und Verknüpfungen; Meilensteine mit Fortschritt |
+| **Themen** | Interne und externe Themen als Pipeline (Eingang → Geplant → In Arbeit → Wartet → Erledigt) mit Gegenüber, Wiedervorlage, „wartet seit“, Fortschritt der Aufgaben und Updates |
 | **Postfach / Kalender** | Das **eigene** Spacemail-Postfach jeder Person (IMAP/SMTP mit eigenem Postfach-Passwort, nur für sie sichtbar) mit KI-Antwortentwürfen, Zusammenfassungen, Ordner „Wichtig“ (nur CRM-Kontakte); Spacemail-Kalender über CalDAV |
 | **Import/Export** | CRM-Paket aus dem SINTRO-CRM (`scripts/export-to-bundle.ts`), CSV-Import mit Vorschau, CSV-Export; alles wiederholbar ohne Dubletten |
 | **Team / Verwaltung** | Organigramm, Profile, Zuständigkeiten; Einladen, Rollen, 2FA-Pflicht, Reset-Links, Audit-Protokoll |
@@ -56,7 +57,7 @@ server/            API, Auth, Datenbank, Postfach- und Claude-Anbindung
   lib/nalpia-fit.ts  Fit-Modell für Investoren
   mail/            IMAP/SMTP-Postfach (Spacemail), Zoho-OAuth (Alternative), Demo-Postfach
   calendar/        CalDAV-Kalender (Spacemail), Zoho-Kalender, Demo-Kalender
-  routes/          News, Aufgaben, Meilensteine, Kontakte, Investoren/Partner, Team, Verwaltung
+  routes/          News, Aufgaben, Themen, Meilensteine, Kontakte, Investoren/Partner, Team, Verwaltung
 scripts/           export-to-bundle.ts (SINTRO-CRM-Export → CRM-Paket), research-to-bundle.ts (Recherche-Liste → CRM-Paket)
 web/src/           Oberfläche (Seiten, Komponenten, Layout)
 tests/             Integrationstests (node:test) inkl. simuliertem Zoho-Server, IMAP/SMTP/CalDAV gegen echte Testserver (optional) und Agent-Durchlauf

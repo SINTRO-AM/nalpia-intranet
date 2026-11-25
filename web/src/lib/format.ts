@@ -151,10 +151,48 @@ export const TASK_STATUS: Record<string, string> = {
   get in_arbeit() {
     return tr("In progress", "In Arbeit");
   },
+  get wartet() {
+    return tr("Waiting", "Wartet");
+  },
   get erledigt() {
     return tr("Done", "Erledigt");
   },
 };
+
+/** Pipeline stages of a topic, in board order */
+export const TOPIC_STAGES = ["idee", "geplant", "in_arbeit", "wartet", "erledigt"] as const;
+const stg = (en: string, de: string, tone: string, hintEn: string, hintDe: string, dot: string) => ({
+  get label() {
+    return tr(en, de);
+  },
+  get hint() {
+    return tr(hintEn, hintDe);
+  },
+  tone,
+  dot,
+});
+export const TOPIC_STAGE: Record<string, { readonly label: string; readonly hint: string; tone: string; dot: string }> = {
+  idee: stg("Inbox", "Eingang", "bg-surface2 text-muted", "Ideas and new requests", "Ideen und neue Anfragen", "bg-muted/50"),
+  geplant: stg("Planned", "Geplant", "bg-surface2 text-brand", "Decided, not started", "Entschieden, noch nicht begonnen", "bg-brand/60"),
+  in_arbeit: stg("In progress", "In Arbeit", "bg-info-soft text-info", "We are working on it", "Wir arbeiten daran", "bg-info"),
+  wartet: stg("Waiting", "Wartet", "bg-accent-soft text-accent-ink", "Ball is with someone else", "Ball liegt bei anderen", "bg-accent"),
+  erledigt: stg("Done", "Erledigt", "bg-pos-soft text-pos", "Finished in the last 30 days", "Abgeschlossen (letzte 30 Tage)", "bg-pos"),
+  verworfen: stg("Dropped", "Verworfen", "bg-surface2 text-muted", "Not pursued", "Nicht weiterverfolgt", "bg-muted/40"),
+};
+
+export const TOPIC_KIND: Record<string, Tone> = {
+  intern: toned("Internal", "Intern", "bg-surface2 text-brand"),
+  extern: toned("External", "Extern", "bg-info-soft text-info"),
+};
+
+/** Suggestions for the area of a topic (free text, these are only offered) */
+export const TOPIC_AREAS = ["Förderung", "Fundraising", "Produkt", "Technik", "Infrastruktur", "Recht & Regulierung", "Partner", "Team", "Finanzen"];
+
+/** Days since a timestamp (whole days, for "waiting for 5 days") */
+export function daysSince(ms: number | null | undefined) {
+  if (!ms) return null;
+  return Math.max(0, differenceInCalendarDays(new Date(), new Date(ms)));
+}
 
 export const MILESTONE_STATUS: Record<string, Tone> = {
   geplant: toned("Planned", "Geplant", "bg-surface2 text-muted"),

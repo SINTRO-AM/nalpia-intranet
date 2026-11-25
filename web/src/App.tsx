@@ -26,6 +26,7 @@ const NewsPage = lazy(() => import("@/pages/News").then((m) => ({ default: m.New
 const NewsDetailPage = lazy(() => import("@/pages/News").then((m) => ({ default: m.NewsDetailPage })));
 const SettingsPage = lazy(() => import("@/pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const TasksPage = lazy(() => import("@/pages/Tasks").then((m) => ({ default: m.TasksPage })));
+const TopicsPage = lazy(() => import("@/pages/Topics").then((m) => ({ default: m.TopicsPage })));
 const TeamPage = lazy(() => import("@/pages/Team").then((m) => ({ default: m.TeamPage })));
 const AgentPage = lazy(() => import("@/pages/Agent").then((m) => ({ default: m.AgentPage })));
 const PersonPage = lazy(() => import("@/pages/Team").then((m) => ({ default: m.PersonPage })));
@@ -122,6 +123,7 @@ export default function App() {
         <Route path="news/:id" element={<NewsDetailPage />} />
         <Route path="aufgaben" element={<TasksPage />} />
         <Route path="aufgaben/meilensteine/:id" element={<MilestoneDetailPage />} />
+        <Route path="themen" element={<TopicsPage />} />
         <Route path="postfach" element={<MailPage />} />
         <Route path="kalender" element={<CalendarPage />} />
         <Route path="kontakte" element={<ContactsPage />} />

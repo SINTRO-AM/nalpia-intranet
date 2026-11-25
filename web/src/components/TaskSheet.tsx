@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Building2, Mail, Send, Trash2, UserRound } from "lucide-react";
+import { Building2, Hash, Hourglass, ListChecks, Mail, Pencil, Send, Trash2, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -8,9 +8,12 @@ import { orgHref, relTime } from "@/lib/format";
 import { useOverlay, useOverlays } from "@/lib/overlays";
 import { invalidateWork, useMe, useTask, useUpdateTask, useUserMap } from "@/lib/queries";
 import type { Task, TaskStatus } from "@/lib/types";
-import { ContactSelect, DueDateField, MilestoneSelect, OrgSelect, PriorityPicker, UserSelect } from "./pickers";
+import { bulletsToChecklist, checklistStats, toggleChecklistLine } from "@/lib/checklist";
+import { Timeline } from "./History";
+import { Markdown } from "./Markdown";
+import { ContactSelect, DueDateField, MilestoneSelect, OrgSelect, PriorityPicker, TopicSelect, UserSelect } from "./pickers";
 import { Sheet } from "./Sheet";
-import { Avatar, Button, Field, Segmented, Skeleton } from "./ui";
+import { Button, cx, Field, Segmented, Skeleton } from "./ui";
 import { tr } from "@/lib/i18n";
 import { Tx, TxNote } from "@/lib/translate";
 
@@ -37,6 +40,7 @@ function CreateTask({ defaults }: { defaults?: Partial<Task> }) {
     dueDate: defaults?.dueDate ?? null,
     priority: defaults?.priority ?? "mittel",
     milestoneId: defaults?.milestoneId ?? null,
+    topicId: defaults?.topicId ?? null,
     contactId: defaults?.contactId ?? null,
     organizationId: defaults?.organizationId ?? null,
     sourceMail: defaults?.sourceMail ?? null,
@@ -100,6 +104,9 @@ function CreateTask({ defaults }: { defaults?: Partial<Task> }) {
         <DueDateField id="t-due" value={f.dueDate} onChange={(v) => setF({ ...f, dueDate: v })} />
       </Field>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label={tr("Topic", "Thema")} htmlFor="t-topic">
+          <TopicSelect id="t-topic" value={f.topicId} onChange={(v) => setF({ ...f, topicId: v })} />
+        </Field>
         <Field label={tr("Milestone", "Meilenstein")} htmlFor="t-ms">
           <MilestoneSelect id="t-ms" value={f.milestoneId} onChange={(v) => setF({ ...f, milestoneId: v })} />
         </Field>
@@ -129,7 +136,7 @@ function CreateTask({ defaults }: { defaults?: Partial<Task> }) {
 function EditTask({ id }: { id: string }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { close } = useOverlays();
+  const { close, open } = useOverlays();
   const { data: t, isLoading, error } = useTask(id);
   const me = useMe().data?.user;
   const users = useUserMap();
@@ -137,6 +144,8 @@ function EditTask({ id }: { id: string }) {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [comment, setComment] = useState("");
+  const [waiting, setWaiting] = useState("");
+  const [editDesc, setEditDesc] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const loaded = useRef(false);
 
@@ -144,6 +153,8 @@ function EditTask({ id }: { id: string }) {
     if (t && !loaded.current) {
       setTitle(t.title);
       setDesc(t.description);
+      setWaiting(t.waitingOn);
+      setEditDesc(!t.description.trim());
       loaded.current = true;
     }
   }, [t]);
@@ -161,6 +172,25 @@ function EditTask({ id }: { id: string }) {
     );
   const canDelete = me && (me.role === "admin" || t.createdBy === me.id || t.assigneeId === me.id);
   const creator = t.createdBy ? users.get(t.createdBy) : undefined;
+  const check = checklistStats(desc);
+  const hasBullets = /^\s*[-*+]\s+(?!\[)/m.test(desc);
+
+  function toggleLine(line: number) {
+    const next = toggleChecklistLine(desc, line);
+    if (next === desc) return;
+    setDesc(next);
+    save({ description: next });
+  }
+
+  async function deleteComment(cid: string) {
+    try {
+      await api.del(`/api/tasks/${id}/comments/${cid}`);
+      qc.invalidateQueries({ queryKey: ["task", id] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   async function addComment() {
     if (!comment.trim()) return;
@@ -209,10 +239,28 @@ function EditTask({ id }: { id: string }) {
         options={[
           { value: "offen", label: tr("Open", "Offen") },
           { value: "in_arbeit", label: tr("In progress", "In Arbeit") },
+          { value: "wartet", label: tr("Waiting", "Wartet") },
           { value: "erledigt", label: tr("Done", "Erledigt") },
         ]}
         className="w-full [&>button]:flex-1 [&>button]:justify-center"
       />
+      {t.status === "wartet" && (
+        <Field label={tr("Waiting on", "Wartet auf")} htmlFor="e-waiting" hint={tr("Who has the ball? E.g. “Reply from IBB”, “Carlo's review”.", "Wer ist am Zug? Z. B. „Rückmeldung der IBB“, „Review von Carlo“.")}>
+          <div className="relative">
+            <Hourglass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-ink" aria-hidden />
+            <input
+              id="e-waiting"
+              className="field pl-9"
+              value={waiting}
+              maxLength={300}
+              onChange={(e) => setWaiting(e.target.value)}
+              onBlur={() => waiting !== t.waitingOn && save({ waitingOn: waiting.trim() })}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder={tr("Who or what are we waiting for?", "Auf wen oder was warten wir?")}
+            />
+          </div>
+        </Field>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={tr("Owner", "Zuständig")} htmlFor="e-assignee">
           <UserSelect id="e-assignee" value={t.assigneeId} onChange={(v) => save({ assigneeId: v })} />
@@ -225,6 +273,9 @@ function EditTask({ id }: { id: string }) {
         <DueDateField id="e-due" value={t.dueDate} onChange={(v) => save({ dueDate: v })} />
       </Field>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label={tr("Topic", "Thema")} htmlFor="e-topic">
+          <TopicSelect id="e-topic" value={t.topicId} onChange={(v) => save({ topicId: v })} />
+        </Field>
         <Field label={tr("Milestone", "Meilenstein")} htmlFor="e-ms">
           <MilestoneSelect id="e-ms" value={t.milestoneId} onChange={(v) => save({ milestoneId: v })} />
         </Field>
@@ -235,6 +286,11 @@ function EditTask({ id }: { id: string }) {
           <OrgSelect id="e-org" value={t.organizationId} onChange={(v) => save({ organizationId: v })} />
         </Field>
       </div>
+      {t.topicId && (
+        <button type="button" onClick={() => open({ kind: "topic", id: t.topicId! })} className="flex items-center gap-2 text-sm font-semibold text-info">
+          <Hash className="h-4 w-4" /> {tr("Open topic:", "Thema öffnen:")} <Tx text={t.topicTitle} />
+        </button>
+      )}
       {t.contactId && (
         <Link to={`/kontakte/${t.contactId}`} onClick={() => close("task")} className="flex items-center gap-2 text-sm font-semibold text-info">
           <UserRound className="h-4 w-4" /> {tr("Open contact:", "Kontakt öffnen:")} {t.contactName}
@@ -269,35 +325,62 @@ function EditTask({ id }: { id: string }) {
           )}
         </div>
       )}
-      <Field label={tr("Description", "Beschreibung")} htmlFor="e-desc">
-        <textarea
-          id="e-desc"
-          className="field min-h-[96px]"
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-          onBlur={() => desc !== t.description && save({ description: desc })}
-          placeholder={tr("Details, links, context …", "Details, Links, Kontext …")}
-        />
+      <div>
+        <div className="mb-1.5 flex items-center gap-2">
+          <h3 className="label mb-0">{tr("Description", "Beschreibung")}</h3>
+          {check.total > 0 && (
+            <span className={cx("inline-flex items-center gap-1 text-[12px] font-semibold", check.done === check.total ? "text-pos" : "text-muted")}>
+              <ListChecks className="h-3.5 w-3.5" aria-hidden />
+              <span className="num">{check.done}/{check.total}</span>
+            </span>
+          )}
+          <span className="flex-1" />
+          {!editDesc && hasBullets && check.total === 0 && (
+            <button type="button" className="text-[12.5px] font-semibold text-info" onClick={() => {
+              const next = bulletsToChecklist(desc);
+              setDesc(next);
+              save({ description: next });
+            }}>
+              {tr("Make checklist", "Als Checkliste")}
+            </button>
+          )}
+          {!editDesc && (
+            <button type="button" className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-muted hover:text-ink" onClick={() => setEditDesc(true)}>
+              <Pencil className="h-3.5 w-3.5" /> {tr("Edit", "Bearbeiten")}
+            </button>
+          )}
+        </div>
+        {editDesc ? (
+          <>
+            <textarea
+              id="e-desc"
+              autoFocus={!!t.description}
+              className="field min-h-[120px] font-[inherit]"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              onBlur={() => {
+                if (desc !== t.description) save({ description: desc });
+                if (desc.trim()) setEditDesc(false);
+              }}
+              placeholder={tr("Details, links, context … Checklists: “- [ ] step”", "Details, Links, Kontext … Checklisten: „- [ ] Schritt“")}
+              aria-label={tr("Description", "Beschreibung")}
+            />
+            <p className="mt-1 text-[12px] text-muted">{tr("Markdown works: **bold**, lists, links, “- [ ]” for checklists.", "Markdown geht: **fett**, Listen, Links, „- [ ]“ für Checklisten.")}</p>
+          </>
+        ) : (
+          <div className="rounded-xl bg-surface px-3.5 py-2.5 ring-1 ring-line" onDoubleClick={() => setEditDesc(true)}>
+            <Markdown className="text-[14px]" onToggleCheck={toggleLine}>
+              {desc}
+            </Markdown>
+          </div>
+        )}
         <TxNote text={t.description} />
-      </Field>
+      </div>
 
       <div>
-        <h3 className="label">{tr("Comments", "Kommentare")}</h3>
+        <h3 className="label">{tr("History & comments", "Verlauf & Kommentare")}</h3>
         <div className="space-y-3">
-          {t.comments.map((c) => {
-            const u = c.userId ? users.get(c.userId) : undefined;
-            return (
-              <div key={c.id} className="flex gap-2.5">
-                <Avatar name={u?.name ?? "?"} color={u?.avatarColor} src={u?.avatarUrl} size={28} />
-                <div className="min-w-0 flex-1 rounded-xl bg-surface px-3 py-2 ring-1 ring-line">
-                  <p className="text-[12.5px]">
-                    <b>{u?.name ?? tr("Former member", "Ehemalig")}</b> <span className="text-muted">{relTime(c.createdAt)}</span>
-                  </p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm"><Tx text={c.body} /></p>
-                </div>
-              </div>
-            );
-          })}
+          <Timeline comments={t.comments} events={t.events ?? []} onDeleteComment={deleteComment} />
           <div className="flex items-end gap-2">
             <textarea
               rows={1}

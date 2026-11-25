@@ -20,6 +20,7 @@ export type Page =
   | { kind: "news" }
   | { kind: "newsItem"; id: string }
   | { kind: "tasks" }
+  | { kind: "topics" }
   | { kind: "milestone"; id: string }
   | { kind: "mail" }
   | { kind: "contacts" }
@@ -42,6 +43,7 @@ export function parsePage(path: string): Page {
   if (p === "/news") return { kind: "news" };
   if ((m = new RegExp(`^/news/${ID}$`).exec(p))) return { kind: "newsItem", id: m[1]! };
   if (p === "/aufgaben") return { kind: "tasks" };
+  if (p === "/themen") return { kind: "topics" };
   if ((m = new RegExp(`^/aufgaben/meilensteine/${ID}$`).exec(p))) return { kind: "milestone", id: m[1]! };
   if (p === "/postfach") return { kind: "mail" };
   if (p === "/kontakte") return { kind: "contacts" };
@@ -88,7 +90,7 @@ const parseTags = (s: string) => {
 const prioLabel = (p: string) =>
   (({ hoch: tr("high", "hoch"), mittel: tr("medium", "mittel"), niedrig: tr("low", "niedrig") }) as Record<string, string>)[p] ?? p;
 const statusLabel = (s: string) =>
-  (({ offen: tr("open", "offen"), in_arbeit: tr("in progress", "in Arbeit"), erledigt: tr("done", "erledigt") }) as Record<string, string>)[s] ?? s;
+  (({ offen: tr("open", "offen"), in_arbeit: tr("in progress", "in Arbeit"), wartet: tr("waiting", "wartet"), erledigt: tr("done", "erledigt") }) as Record<string, string>)[s] ?? s;
 const msStatusLabel = (s: string) =>
   (({ geplant: tr("planned", "geplant"), aktiv: tr("active", "aktiv"), erreicht: tr("reached", "erreicht"), verschoben: tr("postponed", "verschoben") }) as Record<string, string>)[s] ?? s;
 const catLabel = (c: string) =>
@@ -155,7 +157,7 @@ function taskLine(t: TaskRow, today: string, withAssignee = false) {
         : tr(`due ${fmtDate(t.due_date)}`, `fällig ${fmtDate(t.due_date)}`)
     : tr("no due date", "ohne Termin");
   const ctx = [t.org_name && `${t.org_name}`, t.contact_name && !t.org_name && t.contact_name, t.milestone && `${tr("Milestone", "Meilenstein")}: ${t.milestone}`].filter(Boolean).join(", ");
-  return `- [${t.title}](/aufgaben?task=${t.id}) – ${due}, ${tr("priority", "Priorität")} ${prioLabel(t.priority)}${t.status === "in_arbeit" ? tr(", in progress", ", in Arbeit") : ""}${withAssignee ? `, ${tr("owner", "zuständig")}: ${t.assignee ?? nobody()}` : ""}${ctx ? ` (${ctx})` : ""} {id: ${t.id}}`;
+  return `- [${t.title}](/aufgaben?task=${t.id}) – ${due}, ${tr("priority", "Priorität")} ${prioLabel(t.priority)}${t.status === "in_arbeit" ? tr(", in progress", ", in Arbeit") : t.status === "wartet" ? tr(", waiting", ", wartet") : ""}${withAssignee ? `, ${tr("owner", "zuständig")}: ${t.assignee ?? nobody()}` : ""}${ctx ? ` (${ctx})` : ""} {id: ${t.id}}`;
 }
 
 function myOpenTasks(db: DB, userId: string, limit = 25) {
@@ -269,13 +271,70 @@ export function pageContext(db: DB, user: UserRow, page: Page, now = Date.now())
     }
   };
 
+  const topicsBlock = (limit: number, onlyMine: boolean) => {
+    const rows = db
+      .prepare(
+        `SELECT tp.id, tp.title, tp.kind, tp.stage, tp.area, tp.counterpart, tp.waiting_on, tp.waiting_since, tp.next_step, tp.follow_up, tp.due_date,
+           u.name AS owner, og.name AS org,
+           (SELECT COUNT(*) FROM tasks t WHERE t.topic_id = tp.id) AS total,
+           (SELECT COUNT(*) FROM tasks t WHERE t.topic_id = tp.id AND t.status = 'erledigt') AS done
+         FROM topics tp LEFT JOIN users u ON u.id = tp.owner_id LEFT JOIN organizations og ON og.id = tp.organization_id
+         WHERE tp.stage NOT IN ('erledigt','verworfen') ${onlyMine ? "AND tp.owner_id = ?" : ""}
+         ORDER BY CASE tp.stage WHEN 'wartet' THEN 0 WHEN 'in_arbeit' THEN 1 WHEN 'geplant' THEN 2 ELSE 3 END, tp.follow_up IS NULL, tp.follow_up LIMIT ?`,
+      )
+      .all(...(onlyMine ? [user.id, limit] : [limit])) as {
+      id: string; title: string; kind: string; stage: string; area: string; counterpart: string; waiting_on: string; waiting_since: number | null;
+      next_step: string; follow_up: string | null; due_date: string | null; owner: string | null; org: string | null; total: number; done: number;
+    }[];
+    if (!rows.length) return;
+    const stageWord = (st: string) =>
+      (({ idee: tr("inbox", "Eingang"), geplant: tr("planned", "geplant"), in_arbeit: tr("in progress", "in Arbeit"), wartet: tr("waiting", "wartet") }) as Record<string, string>)[st] ?? st;
+    parts.push(
+      `## ${onlyMine ? tr(`Topics owned by ${firstName(user)}`, `Themen von ${firstName(user)}`) : tr("Open topics (internal and external)", "Offene Themen (intern und extern)")}\n` +
+        rows
+          .map((r) => {
+            const bits = [
+              r.kind === "extern" ? tr("external", "extern") : tr("internal", "intern"),
+              stageWord(r.stage),
+              r.area,
+              r.counterpart || r.org ? `${tr("with", "mit")} ${r.counterpart || r.org}` : "",
+              r.total ? tr(`${r.done}/${r.total} tasks done`, `${r.done}/${r.total} Aufgaben erledigt`) : "",
+              r.stage === "wartet" && r.waiting_on ? `${tr("waiting on", "wartet auf")}: ${r.waiting_on}${r.waiting_since ? tr(` since ${fmtTs(r.waiting_since)}`, ` seit ${fmtTs(r.waiting_since)}`) : ""}` : "",
+              r.next_step ? `${tr("next step", "nächster Schritt")}: ${r.next_step}` : "",
+              r.follow_up ? `${tr("follow-up", "Wiedervorlage")} ${fmtDate(r.follow_up)}${r.follow_up < today ? tr(" (overdue)", " (überfällig)") : ""}` : "",
+              r.due_date ? `${tr("target", "Ziel")} ${fmtDate(r.due_date)}` : "",
+              r.owner && !onlyMine ? `${tr("owner", "verantwortlich")}: ${r.owner}` : "",
+            ].filter(Boolean);
+            return `- [${r.title}](/themen?thema=${r.id}) – ${bits.join(", ")}`;
+          })
+          .join("\n"),
+    );
+  };
+
   switch (page.kind) {
+    case "topics": {
+      label = tr("Topics", "Themen");
+      const c = db
+        .prepare(`SELECT SUM(stage = 'wartet') AS waiting, SUM(stage NOT IN ('erledigt','verworfen')) AS open, SUM(follow_up IS NOT NULL AND follow_up <= ? AND stage NOT IN ('erledigt','verworfen')) AS due FROM topics`)
+        .get(today) as { waiting: number | null; open: number | null; due: number | null };
+      if (c.open) facts.push(tr(`${c.open} open topics`, `${c.open} offene Themen`));
+      if (c.waiting) facts.push(tr(`${c.waiting} waiting`, `${c.waiting} warten`));
+      if (c.due) facts.push(tr(`${c.due} follow-ups due`, `${c.due} Wiedervorlagen fällig`));
+      topicsBlock(40, false);
+      suggestions = [
+        S("What is stuck?", "Was hängt?", "Which topics are stuck or waiting too long, and what should we do about each?", "Welche Themen hängen oder warten zu lange, und was sollten wir jeweils tun?"),
+        S("Weekly update", "Wochen-Update", "Write a short weekly update on our internal and external topics for the team.", "Schreib ein kurzes Wochen-Update zu unseren internen und externen Themen fürs Team."),
+        S("Next steps", "Nächste Schritte", "Suggest the next concrete step for each topic in progress.", "Schlag für jedes Thema in Arbeit den nächsten konkreten Schritt vor."),
+      ];
+      break;
+    }
     case "start": {
       label = tr("Home", "Start");
       taskFacts();
       if (news.length) facts.push(tr(`${news.length} unread news`, `${news.length} ungelesene News`));
       tasksBlock(15);
       followBlock();
+      topicsBlock(8, true);
       newsBlock(false);
       const ms = db
         .prepare(`SELECT m.id, m.title, m.due_date, m.status, u.name AS owner FROM milestones m LEFT JOIN users u ON u.id = m.owner_id WHERE m.status IN ('geplant','aktiv') ORDER BY m.due_date IS NULL, m.due_date LIMIT 6`)
@@ -301,6 +360,7 @@ export function pageContext(db: DB, user: UserRow, page: Page, now = Date.now())
       taskFacts();
       if (stats.week) facts.push(tr(`${stats.week} in the next 7 days`, `${stats.week} in den nächsten 7 Tagen`));
       tasksBlock(40);
+      topicsBlock(15, false);
       const team = db
         .prepare(
           `SELECT u.name, COUNT(*) AS open, SUM(CASE WHEN t.due_date < ? THEN 1 ELSE 0 END) AS overdue
@@ -810,7 +870,7 @@ export const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         id: { type: "string" },
-        status: { type: "string", enum: ["offen", "in_arbeit", "erledigt"], description: "offen = open, in_arbeit = in progress, erledigt = done" },
+        status: { type: "string", enum: ["offen", "in_arbeit", "wartet", "erledigt"], description: "offen = open, in_arbeit = in progress, wartet = waiting on someone, erledigt = done" },
         faellig: { type: "string", description: "Due date, YYYY-MM-DD, or empty to remove it" },
         prioritaet: { type: "string", enum: ["hoch", "mittel", "niedrig"], description: "Priority: hoch = high, mittel = medium, niedrig = low" },
         titel: { type: "string", description: "Title" },
@@ -1045,7 +1105,7 @@ export function runTool(db: DB, me: UserRow, name: string, input: Record<string,
       if (!t) return { text: tr("This task does not exist.", "Diese Aufgabe gibt es nicht."), isError: true };
       if (t.assignee_id !== me.id && t.created_by !== me.id && me.role !== "admin")
         return { text: tr("Only the task's owner or creator can change this task.", "Diese Aufgabe darf nur die zuständige oder erstellende Person ändern."), isError: true };
-      const status = ["offen", "in_arbeit", "erledigt"].includes(str(input.status)) ? str(input.status) : t.status;
+      const status = ["offen", "in_arbeit", "wartet", "erledigt"].includes(str(input.status)) ? str(input.status) : t.status;
       const due = input.faellig === "" || input.faellig === null ? null : (isoDate(input.faellig) ?? t.due_date);
       const prio = ["hoch", "mittel", "niedrig"].includes(str(input.prioritaet)) ? str(input.prioritaet) : t.priority;
       const title = str(input.titel, 200) || t.title;

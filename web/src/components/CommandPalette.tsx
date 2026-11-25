@@ -8,6 +8,7 @@ import {
   Home,
   Inbox,
   Handshake,
+  Kanban,
   Bot,
   Megaphone,
   Newspaper,
@@ -23,7 +24,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, qs } from "@/lib/api";
-import { CONTACT_CATEGORIES, dueInfo, orgHref } from "@/lib/format";
+import { CONTACT_CATEGORIES, dueInfo, orgHref, TOPIC_KIND, TOPIC_STAGE } from "@/lib/format";
 import type { OrgKind } from "@/lib/types";
 import { useOverlay, useOverlays } from "@/lib/overlays";
 import { useMe } from "@/lib/queries";
@@ -39,6 +40,7 @@ interface SearchResult {
   milestones: { id: string; title: string; dueDate: string | null; status: string }[];
   people: User[];
   orgs: { id: string; name: string; kind: OrgKind; type: string; stage: string; city: string }[];
+  topics?: { id: string; title: string; kind: string; stage: string; area: string; counterpart: string }[];
 }
 
 export function CommandPalette() {
@@ -70,6 +72,7 @@ export function CommandPalette() {
 
   const actions: { label: string; icon: LucideIcon; run: () => void; kw: string }[] = [
     { label: tr("New task", "Neue Aufgabe"), icon: Plus, run: () => open({ kind: "task" }), kw: "task todo new to-do aufgabe neu" },
+    { label: tr("New topic", "Neues Thema"), icon: Kanban, run: () => open({ kind: "topic" }), kw: "topic project matter pipeline thema projekt vorgang intern extern" },
     { label: tr("Write a new post", "Neuen Beitrag schreiben"), icon: Megaphone, run: () => open({ kind: "news" }), kw: "news post update announcement beitrag neuigkeit" },
     { label: tr("New e-mail", "Neue E-Mail"), icon: Inbox, run: () => open({ kind: "compose", defaults: {} }), kw: "mail email write compose schreiben" },
     { label: tr("Add a new contact", "Neuen Kontakt anlegen"), icon: UserPlus, run: () => open({ kind: "contact" }), kw: "contact crm investor partner person kontakt" },
@@ -81,6 +84,8 @@ export function CommandPalette() {
     { label: tr("Home", "Start"), icon: Home, to: "/" },
     { label: "News", icon: Newspaper, to: "/news" },
     { label: tr("Tasks", "Aufgaben"), icon: CheckSquare, to: "/aufgaben" },
+    { label: tr("Task board", "Aufgaben-Board"), icon: CheckSquare, to: "/aufgaben?ansicht=board" },
+    { label: tr("Topics", "Themen"), icon: Kanban, to: "/themen" },
     { label: tr("Milestones", "Meilensteine"), icon: Flag, to: "/aufgaben?ansicht=meilensteine" },
     { label: tr("Mail", "Postfach"), icon: Inbox, to: "/postfach" },
     { label: tr("Partners", "Partner"), icon: Handshake, to: "/partner" },
@@ -104,6 +109,8 @@ export function CommandPalette() {
       ? `p-${r.people[0].id}`
       : r.orgs?.[0]
         ? `o-${r.orgs[0].id}`
+        : r.topics?.[0]
+          ? `tp-${r.topics[0].id}`
         : r.tasks[0]
           ? `t-${r.tasks[0].id}`
           : r.contacts[0]
@@ -137,7 +144,7 @@ export function CommandPalette() {
                 autoFocus
                 value={q}
                 onValueChange={setQ}
-                placeholder={tr("Search tasks, clients, investors, people …", "Suchen: Aufgaben, Kunden, Investoren, Personen …")}
+                placeholder={tr("Search tasks, topics, investors, people …", "Suchen: Aufgaben, Themen, Investoren, Personen …")}
                 className="h-14 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted/70"
               />
               <button className="text-sm font-semibold text-muted sm:hidden" onClick={() => close("palette")}>
@@ -172,6 +179,20 @@ export function CommandPalette() {
                       </Command.Item>
                     );
                   })}
+                </Command.Group>
+              )}
+              {r && (r.topics?.length ?? 0) > 0 && (
+                <Command.Group heading={tr("Topics", "Themen")} className={group}>
+                  {r.topics!.map((t) => (
+                    <Command.Item key={t.id} value={`tp-${t.id}`} className={item} onSelect={() => go(() => open({ kind: "topic", id: t.id }))}>
+                      <Kanban className="h-4 w-4 shrink-0 text-muted" />
+                      <span className={`min-w-0 flex-1 truncate ${t.stage === "erledigt" || t.stage === "verworfen" ? "text-muted" : ""}`}>
+                        <Tx text={t.title} />
+                        {t.counterpart && <span className="text-muted"> – {t.counterpart}</span>}
+                      </span>
+                      <span className="text-[12.5px] text-muted">{TOPIC_KIND[t.kind]?.label} · {TOPIC_STAGE[t.stage]?.label}</span>
+                    </Command.Item>
+                  ))}
                 </Command.Group>
               )}
               {r && r.tasks.length > 0 && (

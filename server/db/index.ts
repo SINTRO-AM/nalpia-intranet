@@ -12,13 +12,19 @@ export function openDb(file: string): DB {
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
   db.pragma("synchronous = NORMAL");
-  migrate(db);
+  migrate(db, file);
   return db;
 }
 
-function migrate(db: DB) {
+function migrate(db: DB, file: string) {
   db.exec("CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)");
   const done = new Set((db.prepare("SELECT id FROM _migrations").all() as { id: number }[]).map((r) => r.id));
+  // Safety net: an existing database gets a consistent copy before new migrations run
+  const pending = migrations.filter((m) => !done.has(m.id));
+  if (pending.length && done.size && file !== ":memory:") {
+    const target = `${file}.pre-migration-${pending[pending.length - 1]!.id}.bak`;
+    if (!fs.existsSync(target)) db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  }
   for (const m of migrations) {
     if (done.has(m.id)) continue;
     // PRAGMA foreign_keys has no effect inside a transaction, so it is switched outside.

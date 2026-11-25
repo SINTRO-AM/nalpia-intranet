@@ -184,6 +184,8 @@ Wiederholtes Importieren legt nichts doppelt an; Status, Zuständigkeit, Notizen
 ]
 ```
 
+Ebenso eine Liste `topics` (Themen: `ref`, `title`, `kind` intern/extern, `stage`, `area`, `ownerEmail`, `counterpart`, `nextStep`, `followUp`, `dueDate`, `orgRef`/`orgName`); Aufgaben verweisen mit `topicRef` darauf. Bestehende Aufgaben ohne Thema werden beim erneuten Import nur dem Thema zugeordnet, sonst bleibt alles, wie es ist; die Phase eines bestehenden Themas ändert ein Import nie.
+
 Zugewiesen wird per E-Mail an ein bestehendes Konto (auch eingeladen, noch nicht aktiviert). Der Schalter „Aufgaben aus dem CRM anlegen“ ist dafür nicht nötig – er betrifft nur Aufgaben aus der CRM-Vorgeschichte. Gibt es das Konto nicht, entsteht die Aufgabe ohne Zuständigkeit und die Vorschau zeigt einen Hinweis – also vorher alle Personen anlegen. `orgRef` (oder `orgName`) verknüpft die Aufgabe mit einer Firma. Wiederholtes Importieren legt nichts doppelt an (Referenz `plan:<ref>`); mit `--update` bzw. dem Schalter „Bereits importierte Datensätze überschreiben“ werden offene Aufgaben überschrieben, erledigte bleiben unangetastet. Jede Person erhält eine Benachrichtigung mit der Zahl ihrer neuen Aufgaben.
 
 ## Alternative ohne eigenen Server

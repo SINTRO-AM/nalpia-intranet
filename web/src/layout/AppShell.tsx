@@ -11,6 +11,7 @@ import {
   Flag,
   Home,
   Inbox,
+  Kanban,
   LogOut,
   Megaphone,
   Menu,
@@ -40,6 +41,7 @@ import { NotificationsSheet } from "@/components/NotificationsSheet";
 import { OrgSheet } from "@/components/OrgSheet";
 import { Sheet } from "@/components/Sheet";
 import { TaskSheet } from "@/components/TaskSheet";
+import { TopicSheet } from "@/components/TopicSheet";
 import { Avatar, cx, IconButton, Kbd } from "@/components/ui";
 import { LogoFull, Wordmark } from "./Logo";
 import { tr } from "@/lib/i18n";
@@ -63,6 +65,7 @@ function useNav(): { main: NavItem[]; crm: NavItem[]; more: NavItem[] } {
     { to: "/", label: tr("Home", "Start"), icon: Home, end: true },
     { to: "/news", label: "News", icon: Newspaper, badge: news?.unread },
     { to: "/aufgaben", label: tr("Tasks", "Aufgaben"), icon: CheckSquare },
+    { to: "/themen", label: tr("Topics", "Themen"), icon: Kanban },
     { to: "/postfach", label: tr("Mail", "Postfach"), icon: Inbox, badge: mail?.unread },
     { to: "/kalender", label: tr("Calendar", "Kalender"), icon: CalendarDays },
   ];
@@ -106,6 +109,7 @@ function CreateMenu({ trigger }: { trigger: ReactNode }) {
   const { open } = useOverlays();
   const items: { label: string; icon: LucideIcon; run: () => void }[] = [
     { label: tr("Task", "Aufgabe"), icon: CheckSquare, run: () => open({ kind: "task" }) },
+    { label: tr("Topic", "Thema"), icon: Kanban, run: () => open({ kind: "topic" }) },
     { label: tr("Post", "Beitrag"), icon: Megaphone, run: () => open({ kind: "news" }) },
     { label: tr("E-mail", "E-Mail"), icon: Inbox, run: () => open({ kind: "compose", defaults: {} }) },
     { label: tr("Contact", "Kontakt"), icon: UserPlus, run: () => open({ kind: "contact" }) },
@@ -253,8 +257,8 @@ function TopBar() {
 function BottomNav() {
   const { main: all, crm, more: rest } = useNav();
   // The mobile bottom bar only fits four entries – the calendar lives under "More"
-  const main = all.filter((i) => i.to !== "/kalender");
-  const more = [...all.filter((i) => i.to === "/kalender"), ...crm, ...rest];
+  const main = all.filter((i) => i.to !== "/kalender" && i.to !== "/themen");
+  const more = [...all.filter((i) => i.to === "/themen" || i.to === "/kalender"), ...crm, ...rest];
   const [moreOpen, setMoreOpen] = useState(false);
   const loc = useLocation();
   const logout = useLogout();
@@ -327,6 +331,8 @@ function Fab() {
   if (p.startsWith("/postfach") && new URLSearchParams(loc.search).has("m")) return null;
   const action = p.startsWith("/postfach")
     ? { label: tr("New e-mail", "Neue E-Mail"), run: () => open({ kind: "compose", defaults: {} }) }
+    : p.startsWith("/themen")
+      ? { label: tr("New topic", "Neues Thema"), run: () => open({ kind: "topic" }) }
     : p.startsWith("/news")
       ? { label: tr("New post", "Neuer Beitrag"), run: () => open({ kind: "news" }) }
       : p.startsWith("/kontakte")
@@ -365,6 +371,12 @@ export function AppShell() {
       params.delete("task");
       setParams(params, { replace: true });
     }
+    const topic = params.get("thema");
+    if (topic) {
+      open({ kind: "topic", id: topic });
+      params.delete("thema");
+      setParams(params, { replace: true });
+    }
   }, [params, open, setParams]);
 
   useEffect(() => {
@@ -398,6 +410,7 @@ export function AppShell() {
       <BottomNav />
       {!stack.length && <Fab />}
       <TaskSheet />
+      <TopicSheet />
       <MilestoneSheet />
       <NewsComposer />
       <ContactSheet />

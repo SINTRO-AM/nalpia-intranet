@@ -13,6 +13,7 @@ import {
 } from "./milestones.js";
 import { mapTask, taskSelect, type TaskRow } from "./tasks.js";
 import { orgPath, type OrgKind } from "./orgs.js";
+import { mapTopic, topicSelect, type TopicRow } from "./topics.js";
 
 export const miscRoutes = new Hono<AppEnv>();
 
@@ -193,7 +194,35 @@ miscRoutes.get("/home", (c) => {
     href: orgPath(r.kind, r.id),
     source: "org" as const,
   }));
-  const followUps = [...contactFollowUps, ...orgFollowUps]
+  // Topics I own: what is waiting, what needs a follow-up soon, what is in progress
+  const topics = (
+    db
+      .prepare(
+        `${topicSelect(today)} WHERE tp.owner_id = ? AND tp.stage IN ('idee','geplant','in_arbeit','wartet')
+         ORDER BY tp.follow_up IS NULL, tp.follow_up, CASE tp.stage WHEN 'wartet' THEN 0 WHEN 'in_arbeit' THEN 1 WHEN 'geplant' THEN 2 ELSE 3 END, tp.due_date IS NULL, tp.due_date
+         LIMIT 6`,
+      )
+      .all(me.id) as TopicRow[]
+  ).map(mapTopic);
+  const topicFollowUps = (
+    db
+      .prepare(
+        `SELECT id, title, counterpart, next_step AS nextStep, waiting_on AS waitingOn, follow_up AS nextDate FROM topics
+         WHERE owner_id = ? AND follow_up IS NOT NULL AND follow_up <= ? AND stage NOT IN ('erledigt','verworfen') ORDER BY follow_up LIMIT 8`,
+      )
+      .all(me.id, addDaysISO(today, 7)) as { id: string; title: string; counterpart: string; nextStep: string; waitingOn: string; nextDate: string }[]
+  ).map((r) => ({
+    id: r.id,
+    name: r.title,
+    company: r.counterpart,
+    category: "topic",
+    stage: "",
+    nextStep: r.nextStep || r.waitingOn,
+    nextDate: r.nextDate,
+    href: `/themen?thema=${r.id}`,
+    source: "topic" as const,
+  }));
+  const followUps = [...contactFollowUps, ...orgFollowUps, ...topicFollowUps]
     .sort((a, b) => a.nextDate.localeCompare(b.nextDate))
     .slice(0, 8);
   return c.json({
@@ -210,6 +239,7 @@ miscRoutes.get("/home", (c) => {
     news,
     newsUnread,
     followUps,
+    topics,
   });
 });
 
@@ -244,6 +274,11 @@ miscRoutes.get("/search", (c) => {
       "SELECT id, name, kind, type, stage, city FROM organizations WHERE name LIKE ? OR city LIKE ? OR focus LIKE ? OR tags LIKE ? ORDER BY updated_at DESC LIMIT 8",
     )
     .all(like, like, like, like);
+  const topics = db
+    .prepare(
+      "SELECT id, title, kind, stage, area, counterpart FROM topics WHERE title LIKE ? OR description LIKE ? OR counterpart LIKE ? OR area LIKE ? ORDER BY stage IN ('erledigt','verworfen'), updated_at DESC LIMIT 6",
+    )
+    .all(like, like, like, like);
   const people = (
     db
       .prepare(
@@ -251,7 +286,7 @@ miscRoutes.get("/search", (c) => {
       )
       .all(like, like, like, like) as UserRow[]
   ).map(toPublicUser);
-  return c.json({ tasks, news, contacts, milestones, people, orgs });
+  return c.json({ tasks, news, contacts, milestones, people, orgs, topics });
 });
 
 /* ---------- Content translation (interface language) ---------- */

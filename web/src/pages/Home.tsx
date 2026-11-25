@@ -1,12 +1,13 @@
 import { format } from "date-fns";
-import { CheckCircle2, ChevronRight, Diamond, Inbox, Pin } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, Diamond, Hourglass, Inbox, Pin } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Horizon } from "@/components/Horizon";
 
+import { QuickAdd } from "@/components/QuickAdd";
 import { TaskRow } from "@/components/TaskRow";
 import { Avatar, Button, cx, EmptyState, Pill, Progress, Section, Skeleton } from "@/components/ui";
-import { CONTACT_CATEGORIES, countdown, dueInfo, firstName, greeting, mailTime, NEWS_CATEGORIES, relTime } from "@/lib/format";
+import { CONTACT_CATEGORIES, countdown, daysSince, dueInfo, firstName, greeting, mailTime, NEWS_CATEGORIES, relTime, TOPIC_KIND, TOPIC_STAGE } from "@/lib/format";
 import { useOverlays } from "@/lib/overlays";
 import { useHome, useMailList, useMailFolders, useMailStatus, useMe, useUserMap, useContactMeta } from "@/lib/queries";
 import type { Task } from "@/lib/types";
@@ -157,6 +158,7 @@ export function HomePage() {
               </Link>
             }
           >
+            <QuickAdd compact className="mb-1 mt-1" />
             {data.tasks.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle2 className="h-5 w-5" />}
@@ -219,6 +221,53 @@ export function HomePage() {
               </ul>
             )}
           </Section>
+
+          {data.topics.length > 0 && (
+            <Section
+              title={tr("Your topics", "Deine Themen")}
+              id="home-topics"
+              action={
+                <Link to="/themen?person=me" className="link text-[13px]">
+                  {tr("Board", "Board")}
+                </Link>
+              }
+            >
+              <ul>
+                {data.topics.map((t) => {
+                  const wait = daysSince(t.waitingSince);
+                  const f = t.followUp ? dueInfo(t.followUp) : null;
+                  return (
+                    <li key={t.id}>
+                      <button onClick={() => open({ kind: "topic", id: t.id })} className="w-full border-b border-line py-2.5 text-left last:border-0">
+                        <span className="flex items-center gap-2">
+                          <span className={cx("h-2 w-2 shrink-0 rounded-full", TOPIC_STAGE[t.stage]?.dot)} aria-hidden />
+                          <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold"><Tx text={t.title} /></span>
+                          <span className={cx("shrink-0 rounded-md px-1.5 py-px text-[11px] font-semibold", TOPIC_KIND[t.kind]?.tone)}>{TOPIC_KIND[t.kind]?.label}</span>
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[12.5px] text-muted">
+                          <span>{TOPIC_STAGE[t.stage]?.label}</span>
+                          {t.counterpart && (
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <Building2 className="h-3 w-3 shrink-0" aria-hidden />
+                              <span className="truncate">{t.counterpart}</span>
+                            </span>
+                          )}
+                          {t.stage === "wartet" && (
+                            <span className={cx("inline-flex items-center gap-1 font-semibold", (wait ?? 0) >= 14 ? "text-neg" : "text-accent-ink")}>
+                              <Hourglass className="h-3 w-3" aria-hidden />
+                              {wait ? tr(`${wait} d`, `${wait} T.`) : tr("today", "heute")}
+                            </span>
+                          )}
+                          {t.taskTotal > 0 && <span className="num">{t.taskDone}/{t.taskTotal}</span>}
+                          {f && <span className={cx(f.tone === "over" ? "font-semibold text-neg" : f.tone === "today" ? "font-semibold text-accent-ink" : "")}>{tr("Follow-up", "Wiedervorlage")} {f.label}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Section>
+          )}
 
           <Section
             title={tr("Milestones", "Meilensteine")}
@@ -285,7 +334,7 @@ export function HomePage() {
                           </span>
                           <span className="block truncate text-[13px] text-muted">{c.nextStep ? <Tx text={c.nextStep} /> : (stageLabels?.[c.stage] ?? c.stage)}</span>
                         </span>
-                        <Pill className={cx(CONTACT_CATEGORIES[c.category]?.tone, "hidden sm:inline-flex")}>{CONTACT_CATEGORIES[c.category]?.label}</Pill>
+                        <Pill className={cx(c.category === "topic" ? "bg-surface2 text-brand" : CONTACT_CATEGORIES[c.category]?.tone, "hidden sm:inline-flex")}>{c.category === "topic" ? tr("Topic", "Thema") : CONTACT_CATEGORIES[c.category]?.label}</Pill>
                         <span className={cx("shrink-0 text-[12.5px]", d.tone === "over" ? "font-semibold text-neg" : d.tone === "today" ? "font-semibold text-accent-ink" : "text-muted")}>{d.label}</span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-muted" />
                       </Link>

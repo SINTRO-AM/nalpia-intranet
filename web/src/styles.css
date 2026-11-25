@@ -147,6 +147,15 @@
   .prose-nalpia li {
     @apply my-1;
   }
+  .prose-nalpia li.task-list-item {
+    @apply list-none;
+  }
+  .prose-nalpia ul.contains-task-list {
+    @apply pl-1;
+  }
+  .prose-nalpia ul.contains-task-list ul.contains-task-list {
+    @apply pl-6;
+  }
   .prose-nalpia a {
     @apply link;
   }

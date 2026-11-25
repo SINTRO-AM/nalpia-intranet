@@ -128,6 +128,26 @@ const planTaskSchema = z.object({
   priority: z.enum(["hoch", "mittel", "niedrig"]).default("mittel"),
   orgRef: z.string().max(200).optional(),
   orgName: z.string().max(300).optional(),
+  /** Topic of the bundle (topics[].ref) */
+  topicRef: z.string().max(200).optional(),
+});
+
+/** Planned topics (internal or external matters with a pipeline stage). Idempotent via ref. */
+const planTopicSchema = z.object({
+  ref,
+  title: text(200).pipe(z.string().min(1)),
+  description: opt(8000),
+  kind: z.enum(["intern", "extern"]).default("intern"),
+  stage: z.enum(["idee", "geplant", "in_arbeit", "wartet", "erledigt", "verworfen"]).default("geplant"),
+  area: opt(60),
+  ownerEmail: z.string().trim().toLowerCase().max(254).optional(),
+  counterpart: opt(160),
+  waitingOn: opt(300),
+  nextStep: opt(300),
+  followUp: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  orgRef: z.string().max(200).optional(),
+  orgName: z.string().max(300).optional(),
 });
 
 export const crmBundleSchema = z.object({
@@ -144,6 +164,7 @@ export const crmBundleSchema = z.object({
   contacts: z.array(contactSchema).max(40000).default([]),
   activities: z.array(activitySchema).max(100000).default([]),
   tasks: z.array(planTaskSchema).max(2000).default([]),
+  topics: z.array(planTopicSchema).max(500).default([]),
 });
 
 export type CrmBundle = z.infer<typeof crmBundleSchema>;
@@ -172,7 +193,8 @@ export interface ImportResult {
   orgs: Counts;
   contacts: Counts;
   activities: { created: number; skipped: number };
-  tasks: { created: number; skipped: number; updated?: number };
+  tasks: { created: number; skipped: number; updated?: number; linked?: number };
+  topics?: { created: number; skipped: number; updated: number };
   /** Status ids (stable API values): set | unchanged | not provided */
   round: "gesetzt" | "unverändert" | "keine Angabe";
   warnings: string[];
@@ -456,7 +478,8 @@ export function importCrmBundle(db: DB, bundle: CrmBundle, opts: ImportOptions):
     if (opts.tasks) createTasks(db, bundle, orgIdByRef, contactIdByRef, ownerId, opts.actorId, now, res);
 
     /* ---------- Planned tasks (explicit list in the bundle) ---------- */
-    if (bundle.tasks.length) createPlanTasks(db, bundle, orgIdByRef, opts, now, res, warnings);
+    const topicIdByRef = bundle.topics.length ? createPlanTopics(db, bundle, orgIdByRef, opts, now, res, warnings) : new Map<string, string>();
+    if (bundle.tasks.length) createPlanTasks(db, bundle, orgIdByRef, topicIdByRef, opts, now, res, warnings);
 
     /* ---------- Funding round ---------- */
     if (bundle.round) {
@@ -480,7 +503,7 @@ export function importCrmBundle(db: DB, bundle: CrmBundle, opts: ImportOptions):
       userId: opts.actorId,
       action: "crm.import",
       ip: opts.ip,
-      meta: { source: bundle.source, update: !!opts.update, orgs: res.orgs, contacts: res.contacts, activities: res.activities, tasks: res.tasks },
+      meta: { source: bundle.source, update: !!opts.update, orgs: res.orgs, contacts: res.contacts, activities: res.activities, tasks: res.tasks, topics: res.topics },
     });
     if (opts.dryRun) throw new Rollback();
   });
@@ -503,7 +526,8 @@ export function describeImport(r: ImportResult) {
     `Organizations: ${c(r.orgs)}`,
     `Contacts: ${c(r.contacts)}`,
     `Activity: ${r.activities.created} new, ${r.activities.skipped} skipped`,
-    `Tasks: ${r.tasks.created} new, ${r.tasks.updated ?? 0} updated, ${r.tasks.skipped} already present`,
+    `Tasks: ${r.tasks.created} new, ${r.tasks.updated ?? 0} updated, ${r.tasks.linked ?? 0} linked to a topic, ${r.tasks.skipped} already present`,
+    ...(r.topics ? [`Topics: ${r.topics.created} new, ${r.topics.updated} updated, ${r.topics.skipped} already present`] : []),
     `Funding round: ${ROUND_LABEL[r.round]}`,
     r.owner ? `Owner: ${r.owner.name}` : "Owner: nobody",
     ...r.warnings.map((w) => `Note: ${w}`),
@@ -511,7 +535,7 @@ export function describeImport(r: ImportResult) {
 }
 
 
-function createPlanTasks(
+function createPlanTopics(
   db: DB,
   bundle: CrmBundle,
   orgIdByRef: Map<string, { id: string; kind: OrgKind; name: string }>,
@@ -520,15 +544,77 @@ function createPlanTasks(
   res: ImportResult,
   warnings: string[],
 ) {
+  res.topics = { created: 0, skipped: 0, updated: 0 };
+  const userByEmail = db.prepare("SELECT id FROM users WHERE lower(email) = ? AND status != 'disabled'");
+  const orgByRefDb = db.prepare("SELECT id FROM organizations WHERE external_ref = ?");
+  const orgByName = db.prepare("SELECT id FROM organizations WHERE lower(trim(name)) = ? LIMIT 1");
+  const existing = db.prepare("SELECT id, stage FROM topics WHERE external_ref = ?");
+  const ins = db.prepare(
+    `INSERT INTO topics (id, title, description, kind, stage, area, owner_id, organization_id, counterpart, waiting_on, waiting_since, next_step, follow_up, due_date, sort_order, external_ref, created_by, created_at, updated_at, closed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const upd = db.prepare(
+    `UPDATE topics SET title = ?, description = ?, kind = ?, area = ?, owner_id = ?, organization_id = ?, counterpart = ?, next_step = ?, follow_up = ?, due_date = ?, updated_at = ? WHERE id = ?`,
+  );
+  const ids = new Map<string, string>();
+  const missingUsers = new Set<string>();
+  let order = 0;
+  for (const t of bundle.topics) {
+    const extRef = `topic:${t.ref}`;
+    const owner = t.ownerEmail ? (userByEmail.get(t.ownerEmail) as { id: string } | undefined) : undefined;
+    if (t.ownerEmail && !owner) missingUsers.add(t.ownerEmail);
+    let orgId: string | null = null;
+    if (t.orgRef) orgId = orgIdByRef.get(t.orgRef)?.id ?? (orgByRefDb.get(t.orgRef) as { id: string } | undefined)?.id ?? null;
+    if (!orgId && t.orgName) orgId = (orgByName.get(normName(t.orgName)) as { id: string } | undefined)?.id ?? null;
+    const prev = existing.get(extRef) as { id: string; stage: string } | undefined;
+    if (prev) {
+      ids.set(t.ref, prev.id);
+      // The stage belongs to the team once the topic exists – an import never moves cards back
+      if (opts.update && !["erledigt", "verworfen"].includes(prev.stage)) {
+        upd.run(t.title, t.description ?? "", t.kind, t.area ?? "", owner?.id ?? null, orgId, t.counterpart ?? "", t.nextStep ?? "", t.followUp ?? null, t.dueDate ?? null, now, prev.id);
+        res.topics.updated++;
+      } else res.topics.skipped++;
+      continue;
+    }
+    const id = newId();
+    const closed = ["erledigt", "verworfen"].includes(t.stage);
+    ins.run(
+      id, t.title, t.description ?? "", t.kind, t.stage, t.area ?? "", owner?.id ?? null, orgId, t.counterpart ?? "", t.waitingOn ?? "",
+      t.stage === "wartet" ? now : null, t.nextStep ?? "", t.followUp ?? null, t.dueDate ?? null, now + order++, extRef, opts.actorId, now, now, closed ? now : null,
+    );
+    ids.set(t.ref, id);
+    res.topics.created++;
+  }
+  if (missingUsers.size) {
+    warnings.push(
+      tr(`No account for ${[...missingUsers].join(", ")} – these topics are created without an owner.`, `Kein Konto für ${[...missingUsers].join(", ")} – diese Themen werden ohne Verantwortliche angelegt.`),
+    );
+  }
+  return ids;
+}
+
+function createPlanTasks(
+  db: DB,
+  bundle: CrmBundle,
+  orgIdByRef: Map<string, { id: string; kind: OrgKind; name: string }>,
+  topicIdByRef: Map<string, string>,
+  opts: ImportOptions,
+  now: number,
+  res: ImportResult,
+  warnings: string[],
+) {
   const userByEmail = db.prepare("SELECT id, name FROM users WHERE lower(email) = ? AND status != 'disabled'");
   const orgByRefDb = db.prepare("SELECT id FROM organizations WHERE external_ref = ?");
   const orgByName = db.prepare("SELECT id FROM organizations WHERE lower(trim(name)) = ? LIMIT 1");
-  const existing = db.prepare("SELECT id, status FROM tasks WHERE external_ref = ?");
+  const existing = db.prepare("SELECT id, status, topic_id FROM tasks WHERE external_ref = ?");
+  const topicByRefDb = db.prepare("SELECT id FROM topics WHERE external_ref = ?");
   const ins = db.prepare(
-    `INSERT INTO tasks (id, title, description, assignee_id, created_by, due_date, priority, status, organization_id, sort_order, created_at, updated_at, external_ref)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'offen', ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, title, description, assignee_id, created_by, due_date, priority, status, organization_id, topic_id, sort_order, created_at, updated_at, external_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'offen', ?, ?, ?, ?, ?, ?)`,
   );
-  const upd = db.prepare("UPDATE tasks SET title = ?, description = ?, assignee_id = ?, due_date = ?, priority = ?, organization_id = ?, updated_at = ? WHERE id = ?");
+  const upd = db.prepare("UPDATE tasks SET title = ?, description = ?, assignee_id = ?, due_date = ?, priority = ?, organization_id = ?, topic_id = COALESCE(?, topic_id), updated_at = ? WHERE id = ?");
+  const linkTopic = db.prepare("UPDATE tasks SET topic_id = ? WHERE id = ? AND topic_id IS NULL");
+  const missingTopics = new Set<string>();
   const missingUsers = new Set<string>();
   const missingOrgs: string[] = [];
   const assigned = new Map<string, number>();
@@ -541,17 +627,26 @@ function createPlanTasks(
     if (t.orgRef) orgId = orgIdByRef.get(t.orgRef)?.id ?? (orgByRefDb.get(t.orgRef) as { id: string } | undefined)?.id ?? null;
     if (!orgId && t.orgName) orgId = (orgByName.get(normName(t.orgName)) as { id: string } | undefined)?.id ?? null;
     if ((t.orgRef || t.orgName) && !orgId) missingOrgs.push(t.orgName || t.orgRef!);
+    let topicId: string | null = null;
+    if (t.topicRef) {
+      topicId = topicIdByRef.get(t.topicRef) ?? (topicByRefDb.get(`topic:${t.topicRef}`) as { id: string } | undefined)?.id ?? null;
+      if (!topicId) missingTopics.add(t.topicRef);
+    }
     const desc = t.description ?? "";
-    const prev = existing.get(extRef) as { id: string; status: string } | undefined;
+    const prev = existing.get(extRef) as { id: string; status: string; topic_id: string | null } | undefined;
     if (prev) {
       if (opts.update && prev.status !== "erledigt") {
-        upd.run(t.title, desc, user?.id ?? null, t.dueDate ?? null, t.priority, orgId, now, prev.id);
+        upd.run(t.title, desc, user?.id ?? null, t.dueDate ?? null, t.priority, orgId, topicId, now, prev.id);
         res.tasks.updated = (res.tasks.updated ?? 0) + 1;
+      } else if (topicId && !prev.topic_id) {
+        // Existing task without a topic: only the link is added, nothing else changes
+        linkTopic.run(topicId, prev.id);
+        res.tasks.linked = (res.tasks.linked ?? 0) + 1;
       } else res.tasks.skipped++;
       continue;
     }
     const id = newId();
-    ins.run(id, t.title, desc, user?.id ?? null, opts.actorId, t.dueDate ?? null, t.priority, orgId, order++, now, now, extRef);
+    ins.run(id, t.title, desc, user?.id ?? null, opts.actorId, t.dueDate ?? null, t.priority, orgId, topicId, order++, now, now, extRef);
     res.tasks.created++;
     if (user && !opts.dryRun) {
       assigned.set(user.id, (assigned.get(user.id) ?? 0) + 1);
@@ -574,6 +669,9 @@ function createPlanTasks(
         `Kein Konto für ${[...missingUsers].join(", ")} – diese Aufgaben werden ohne Zuständigkeit angelegt. Person einladen (Verwaltung → Personen) und zuweisen oder nach der Einladung erneut importieren (mit „aktualisieren“).`,
       ),
     );
+  }
+  if (missingTopics.size) {
+    warnings.push(tr(`Topic not found: ${[...missingTopics].join(", ")} – these tasks are created without a topic.`, `Thema nicht gefunden: ${[...missingTopics].join(", ")} – diese Aufgaben werden ohne Thema angelegt.`));
   }
   if (missingOrgs.length) {
     warnings.push(tr(`Not found in the CRM, task created without a link: ${missingOrgs.slice(0, 10).join(", ")}${missingOrgs.length > 10 ? " …" : ""}`, `Nicht im CRM gefunden, Aufgabe ohne Verknüpfung angelegt: ${missingOrgs.slice(0, 10).join(", ")}${missingOrgs.length > 10 ? " …" : ""}`));

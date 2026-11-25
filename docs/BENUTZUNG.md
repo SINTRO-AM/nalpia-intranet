@@ -12,11 +12,32 @@
 
 ## Im Alltag
 
-- **Start** zeigt, was heute ansteht: fällige Aufgaben, das Zeitband „Die nächsten vier Wochen“ (Punkte = Fälligkeiten, Rauten = Meilensteine), neue Beiträge, ungelesene Mails, Kontakte zum Nachfassen.
-- **Aufgabe anlegen:** der runde **+**-Button unten rechts (Handy) oder **Neu** (Desktop). Abhaken mit dem Kreis, „Rückgängig“ erscheint kurz oben.
+- **Start** zeigt, was heute ansteht: fällige Aufgaben (mit Schnelleingabe), das Zeitband „Die nächsten vier Wochen“ (Punkte = Fälligkeiten, Rauten = Meilensteine), deine Themen, neue Beiträge, ungelesene Mails, Kontakte und Wiedervorlagen zum Nachfassen.
+- **Aufgabe anlegen:** am schnellsten über die Zeile **„Aufgabe hinzufügen …“** (Start, Aufgaben, Board, in jedem Thema) – eine Zeile, Enter, fertig. Sonst der runde **+**-Button unten rechts (Handy) oder **Neu** (Desktop). Abhaken mit dem Kreis, „Rückgängig“ erscheint kurz oben.
 - **Aus einer Mail:** im Postfach „Aufgabe“ oder „Zusammenfassen“ (schlägt Aufgaben vor), „Als Kontakt anlegen“ bzw. „Im Verlauf speichern“.
 - **Antworten mit KI:** „KI-Antwort“ öffnet einen Entwurf. Ziel, Ton und eigene Anweisung wählen, dann „Überarbeiten“. **Prüfe Fakten und Platzhalter in [eckigen Klammern]**, bevor du sendest. Nach „Senden“ hast du 4 Sekunden für „Rückgängig“.
-- **Suchen:** Lupe (Handy) oder Strg/⌘ + K (Desktop). Findet Investoren, Partner, Kontakte, Aufgaben, Personen, News und Meilensteine und legt auch Neues an.
+- **Suchen:** Lupe (Handy) oder Strg/⌘ + K (Desktop). Findet Investoren, Partner, Kontakte, Aufgaben, Themen, Personen, News und Meilensteine und legt auch Neues an.
+
+## Aufgaben schneller erledigen
+
+- **Schnelleingabe:** `Antrag an IBB schicken @carlo fr !hoch #fördermittel` legt die Aufgabe für Carlo an, fällig nächsten Freitag, hohe Priorität, im Thema „Fördermittel …“. Erkannt werden `@Name` (oder `@ich`), `#Thema` (Anfang eines Wortes im Titel reicht), `!hoch`/`!h`/`!!`, `!mittel`, `!niedrig`/`!n` und Daten wie *heute, morgen, übermorgen, Montag … Sonntag, Mo. … So., bis Fr, nächste Woche, in 3 Tagen, in 2 Wochen, Ende der Woche, Monatsende, 5.12., 31.01.2027* (auch Englisch: *tomorrow, fri, next week …*). Unter der Zeile siehst du, was erkannt wurde – das ✕ an einem Chip lässt das Wort im Titel stehen (z. B. „Meeting Freitag vorbereiten“). Nach `@` und `#` erscheinen Vorschläge (↑ ↓, Tab oder Enter).
+- **Status „Wartet“:** für alles, bei dem der Ball bei anderen liegt. Im Feld *Wartet auf* steht, auf wen („Rückmeldung der IBB“). In *Meine* stehen wartende Aufgaben gesammelt unter „Wartet auf andere“, damit sie nicht zwischen den fälligen untergehen.
+- **Schnellaktionen:** Mit der Maus über einer Aufgabe erscheinen *Heute*, *Morgen*, *Nächste Woche* und *Starten* bzw. *Wartet*.
+- **Mehrere auf einmal:** Häkchen links neben einer Aufgabe (oder ⇧-Klick für einen Bereich) – unten erscheint eine Leiste: erledigen, verschieben, zuweisen, einem Thema zuordnen. Die Person bekommt eine einzige Benachrichtigung.
+- **Board:** vier Spalten *Offen – In Arbeit – Wartet – Erledigt* (letzte 14 Tage). Karten ziehen oder Karte anwählen und ← → drücken. Filter nach Person, Thema, Priorität, Meilenstein und Text; die Filter stehen in der Adresse und lassen sich teilen.
+- **Checklisten:** In der Beschreibung `- [ ] Schritt` schreiben – die Kästchen lassen sich direkt anklicken, Karten und Listen zeigen den Stand (z. B. 2/5). „Als Checkliste“ macht aus einer normalen Aufzählung eine Checkliste.
+- **Verlauf:** Jede Aufgabe zeigt, wer wann den Status, die Zuständigkeit, das Datum, die Priorität oder das Thema geändert hat – zusammen mit den Kommentaren.
+- **Tastenkürzel** (Aufgaben, Board): `n` neue Aufgabe, `/` suchen; auf der Themen-Seite `n` neues Thema.
+
+## Themen (intern und extern)
+
+Unter **Themen** liegt alles, was über Wochen läuft und mehrere Aufgaben hat – intern (Architektur-Umbau, Monitoring) oder extern mit einem Gegenüber (EXIST-Antrag mit der Hochschule, Pro FIT mit der IBB, Anbindung eines Brokers).
+
+- **Pipeline:** *Eingang → Geplant → In Arbeit → Wartet → Erledigt* (plus *Verworfen*). Karten ziehen, um die Phase zu ändern oder die Reihenfolge in einer Spalte festzulegen; **+** im Spaltenkopf legt ein Thema mit nur einem Titel direkt in der Spalte an. Alternativ die **Liste** nach Phasen.
+- **Karte:** Intern/Extern, Bereich, Gegenüber, Fortschritt der Aufgaben, nächste fällige Aufgabe (oder nächster Schritt), wie lange es schon wartet (ab 14 Tagen rot), Wiedervorlage und Verantwortliche.
+- **Im Thema:** Phase, Art, Verantwortliche, Gegenüber bzw. Institution aus dem CRM, Bereich, nächster Schritt, Zieltermin, **Wiedervorlage** (erscheint auf der Startseite unter „Nachfassen“), Beschreibung, die Aufgaben mit eigener Schnelleingabe und ein Verlauf mit **Updates** (z. B. Ergebnis eines Telefonats) und allen Änderungen.
+- **Filter:** Alle/Intern/Extern, Person (auch „Meine“), Bereich, Suche.
+- Aufgaben ordnest du über das Feld *Thema* in der Aufgabe, `#thema` in der Schnelleingabe oder die Sammelaktion einem Thema zu. Wird ein Thema gelöscht, bleiben seine Aufgaben erhalten.
 
 ## Sprache (Deutsch/Englisch)
 

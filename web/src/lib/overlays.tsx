@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { Contact, Org, OrgKind, Task } from "./types";
+import type { Contact, Org, OrgKind, Task, Topic } from "./types";
 
 export interface ComposeDefaults {
   to?: string[];
@@ -16,6 +16,7 @@ export interface ComposeDefaults {
 export type Overlay =
   | { kind: "task"; id?: string; defaults?: Partial<Task> }
   | { kind: "milestone"; id?: string }
+  | { kind: "topic"; id?: string; defaults?: Partial<Topic> }
   | { kind: "news"; id?: string }
   | { kind: "contact"; id?: string; defaults?: Partial<Contact> }
   | { kind: "org"; orgKind: OrgKind; id?: string; defaults?: Partial<Org> }

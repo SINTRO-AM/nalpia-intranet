@@ -516,7 +516,8 @@ interface ImportResult {
   orgs: ImportCounts;
   contacts: ImportCounts;
   activities: { created: number; skipped: number };
-  tasks: { created: number; skipped: number; updated?: number };
+  tasks: { created: number; skipped: number; updated?: number; linked?: number };
+  topics?: { created: number; skipped: number; updated: number };
   round: string;
   warnings: string[];
 }
@@ -649,9 +650,17 @@ function CrmImport() {
       <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
         <span className="font-semibold">{tr("Tasks", "Aufgaben")}</span>
         <span className="text-[13px] text-muted">
-          <b className="text-ink">{n(r.tasks?.created ?? 0)}</b> {tr("new", "neu")}{(r.tasks?.updated ?? 0) > 0 && <>, {n(r.tasks.updated ?? 0)} {tr("updated", "aktualisiert")}</>}{(r.tasks?.skipped ?? 0) > 0 && <>, {n(r.tasks.skipped)} {tr("already present", "schon vorhanden")}</>}
+          <b className="text-ink">{n(r.tasks?.created ?? 0)}</b> {tr("new", "neu")}{(r.tasks?.updated ?? 0) > 0 && <>, {n(r.tasks.updated ?? 0)} {tr("updated", "aktualisiert")}</>}{(r.tasks?.linked ?? 0) > 0 && <>, {n(r.tasks.linked ?? 0)} {tr("filed under a topic", "einem Thema zugeordnet")}</>}{(r.tasks?.skipped ?? 0) > 0 && <>, {n(r.tasks.skipped)} {tr("already present", "schon vorhanden")}</>}
         </span>
       </li>
+      {r.topics && (
+        <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
+          <span className="font-semibold">{tr("Topics", "Themen")}</span>
+          <span className="text-[13px] text-muted">
+            <b className="text-ink">{n(r.topics.created)}</b> {tr("new", "neu")}{r.topics.updated > 0 && <>, {n(r.topics.updated)} {tr("updated", "aktualisiert")}</>}{r.topics.skipped > 0 && <>, {n(r.topics.skipped)} {tr("already present", "schon vorhanden")}</>}
+          </span>
+        </li>
+      )}
       <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
         <span className="font-semibold">{tr("Owner", "Zuständig")}</span>
         <span className="text-[13px] text-muted">{r.owner?.name ?? tr("nobody", "niemand")}</span>
@@ -741,7 +750,7 @@ function CrmImport() {
               >
                 {tr("Cancel", "Abbrechen")}
               </Button>
-              <Button variant="primary" loading={busy} onClick={() => send(false)} disabled={!preview.orgs.created && !preview.contacts.created && !preview.activities.created && !preview.orgs.updated && !preview.contacts.updated && !preview.orgs.linked && !preview.contacts.linked && !preview.tasks?.created && !preview.tasks?.updated}>
+              <Button variant="primary" loading={busy} onClick={() => send(false)} disabled={!preview.orgs.created && !preview.contacts.created && !preview.activities.created && !preview.orgs.updated && !preview.contacts.updated && !preview.orgs.linked && !preview.contacts.linked && !preview.tasks?.created && !preview.tasks?.updated && !preview.tasks?.linked && !preview.topics?.created && !preview.topics?.updated}>
                 {tr("Import", "Importieren")}
               </Button>
             </div>

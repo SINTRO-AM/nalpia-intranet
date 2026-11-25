@@ -60,7 +60,7 @@ export interface Me {
   mustSetup2fa?: boolean;
 }
 
-export type TaskStatus = "offen" | "in_arbeit" | "erledigt";
+export type TaskStatus = "offen" | "in_arbeit" | "wartet" | "erledigt";
 export type Priority = "hoch" | "mittel" | "niedrig";
 
 export interface SourceMail {
@@ -82,6 +82,12 @@ export interface Task {
   status: TaskStatus;
   milestoneId: string | null;
   milestoneTitle: string | null;
+  topicId: string | null;
+  topicTitle: string | null;
+  topicKind: TopicKind | null;
+  topicStage: TopicStage | null;
+  /** Who/what the task is waiting on (status "wartet") */
+  waitingOn: string;
   contactId: string | null;
   contactName: string | null;
   contactCompany: string | null;
@@ -103,8 +109,68 @@ export interface Comment {
   createdAt: number;
 }
 
+export type HistoryEvent =
+  | { t: "status"; from: TaskStatus; to: TaskStatus }
+  | { t: "assignee"; from: string | null; to: string | null }
+  | { t: "due"; from: string | null; to: string | null }
+  | { t: "priority"; from: Priority; to: Priority }
+  | { t: "topic"; from: string | null; to: string | null }
+  | { t: "stage"; from: TopicStage; to: TopicStage }
+  | { t: "owner"; from: string | null; to: string | null }
+  | { t: "follow_up"; from: string | null; to: string | null }
+  | { t: "waiting"; from: string; to: string }
+  | { t: "task_done"; taskId: string; title: string }
+  | { t: "task_added"; taskId: string; title: string };
+
+export interface EventEntry {
+  id: string;
+  userId: string | null;
+  createdAt: number;
+  event: HistoryEvent;
+}
+
 export interface TaskDetail extends Task {
   comments: Comment[];
+  events: EventEntry[];
+}
+
+export type TopicKind = "intern" | "extern";
+export type TopicStage = "idee" | "geplant" | "in_arbeit" | "wartet" | "erledigt" | "verworfen";
+
+export interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  kind: TopicKind;
+  stage: TopicStage;
+  area: string;
+  ownerId: string | null;
+  organizationId: string | null;
+  organizationName: string | null;
+  organizationKind: OrgKind | null;
+  counterpart: string;
+  waitingOn: string;
+  waitingSince: number | null;
+  nextStep: string;
+  followUp: string | null;
+  dueDate: string | null;
+  sortOrder: number;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  closedAt: number | null;
+  taskTotal: number;
+  taskDone: number;
+  taskOverdue: number;
+  nextTask: { id: string; title: string; dueDate: string | null; assigneeId: string | null } | null;
+  commentCount: number;
+  lastActivity: number;
+}
+
+export interface TopicDetail extends Topic {
+  tasks: Task[];
+  updates: Comment[];
+  events: EventEntry[];
 }
 
 export type MilestoneStatus = "geplant" | "aktiv" | "erreicht" | "verschoben";
@@ -511,7 +577,8 @@ export interface HomeData {
   };
   news: { id: string; title: string; body: string; category: string; pinned: boolean; createdAt: number; authorId: string; read: boolean }[];
   newsUnread: number;
-  followUps: { id: string; name: string; company: string; category: ContactCategory; stage: string; nextStep: string; nextDate: string; href: string; source: "contact" | "org" }[];
+  followUps: { id: string; name: string; company: string; category: ContactCategory | "topic"; stage: string; nextStep: string; nextDate: string; href: string; source: "contact" | "org" | "topic" }[];
+  topics: Topic[];
 }
 
 export interface MailSummaryAI {

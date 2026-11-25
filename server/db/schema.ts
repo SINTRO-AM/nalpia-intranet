@@ -389,4 +389,87 @@ CREATE TABLE agent_runs (
 CREATE INDEX agent_runs_started ON agent_runs(started_at DESC);
 `,
   },
+  {
+    id: 3,
+    name: "themen-und-kanban",
+    foreignKeysOff: true,
+    sql: `
+-- Topics: internal and external matters (funding applications, partner talks, architecture …) in a pipeline.
+-- Tasks can belong to a topic; the topic shows progress, who it is waiting on and when to follow up.
+CREATE TABLE topics (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'intern' CHECK (kind IN ('intern','extern')),
+  stage TEXT NOT NULL DEFAULT 'geplant' CHECK (stage IN ('idee','geplant','in_arbeit','wartet','erledigt','verworfen')),
+  area TEXT NOT NULL DEFAULT '',
+  owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  counterpart TEXT NOT NULL DEFAULT '',
+  waiting_on TEXT NOT NULL DEFAULT '',
+  waiting_since INTEGER,
+  next_step TEXT NOT NULL DEFAULT '',
+  follow_up TEXT,
+  due_date TEXT,
+  sort_order REAL NOT NULL DEFAULT 0,
+  external_ref TEXT,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  closed_at INTEGER
+);
+CREATE INDEX topics_stage ON topics(stage, sort_order);
+CREATE INDEX topics_owner ON topics(owner_id);
+CREATE INDEX topics_org ON topics(organization_id);
+CREATE UNIQUE INDEX topics_ext ON topics(external_ref) WHERE external_ref IS NOT NULL;
+
+-- Updates on a topic: comments by people and events (phase changes, new owner …) as JSON.
+CREATE TABLE topic_updates (
+  id TEXT PRIMARY KEY,
+  topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL DEFAULT 'comment' CHECK (kind IN ('comment','event')),
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX topic_updates_topic ON topic_updates(topic_id, created_at);
+
+-- Tasks get the status 'wartet' (waiting on someone), a topic and a note on who they are waiting on.
+-- SQLite cannot change a CHECK constraint, so the table is rebuilt (comments stay: foreign keys are off).
+CREATE TABLE tasks_new (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  assignee_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  due_date TEXT,
+  priority TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('hoch','mittel','niedrig')),
+  status TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen','in_arbeit','wartet','erledigt')),
+  milestone_id TEXT REFERENCES milestones(id) ON DELETE SET NULL,
+  topic_id TEXT REFERENCES topics(id) ON DELETE SET NULL,
+  contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+  organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  waiting_on TEXT NOT NULL DEFAULT '',
+  source_mail TEXT,
+  sort_order REAL NOT NULL DEFAULT 0,
+  external_ref TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+INSERT INTO tasks_new (id, title, description, assignee_id, created_by, due_date, priority, status, milestone_id, contact_id, organization_id, source_mail, sort_order, external_ref, created_at, updated_at, completed_at)
+  SELECT id, title, description, assignee_id, created_by, due_date, priority, status, milestone_id, contact_id, organization_id, source_mail, sort_order, external_ref, created_at, updated_at, completed_at FROM tasks;
+DROP TABLE tasks;
+ALTER TABLE tasks_new RENAME TO tasks;
+CREATE INDEX tasks_assignee ON tasks(assignee_id, status);
+CREATE INDEX tasks_milestone ON tasks(milestone_id);
+CREATE INDEX tasks_topic ON tasks(topic_id);
+CREATE INDEX tasks_contact ON tasks(contact_id);
+CREATE INDEX tasks_org ON tasks(organization_id);
+CREATE UNIQUE INDEX tasks_ext ON tasks(external_ref) WHERE external_ref IS NOT NULL;
+
+-- History in the task: besides comments, events (status, owner, due date, topic) as JSON.
+ALTER TABLE task_comments ADD COLUMN kind TEXT NOT NULL DEFAULT 'comment' CHECK (kind IN ('comment','event'));
+`,
+  },
 ];

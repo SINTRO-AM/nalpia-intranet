@@ -2,7 +2,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { addDays, todayISO } from "@/lib/format";
 import { getLang, tr } from "@/lib/i18n";
-import { useContacts, useMilestones, useOrgs, useUsers } from "@/lib/queries";
+import { useContacts, useMilestones, useOrgs, useTopics, useUsers } from "@/lib/queries";
 import { cx } from "./ui";
 import { txNow, useTxVersion } from "@/lib/translate";
 
@@ -61,6 +61,31 @@ export function MilestoneSelect({ value, onChange, id }: { value: string | null 
             {txNow(m.title)}
           </option>
         ))}
+    </Select>
+  );
+}
+
+/** Topic picker: open topics grouped into internal and external (the current one stays even when closed). */
+export function TopicSelect({ value, onChange, id, className, noneLabel = tr("No topic", "Kein Thema") }: { value: string | null | undefined; onChange: (v: string | null) => void; id?: string; className?: string; noneLabel?: string }) {
+  const { data } = useTopics({ state: "all" });
+  useTxVersion();
+  const list = (data ?? []).filter((t) => !["erledigt", "verworfen"].includes(t.stage) || t.id === value);
+  const group = (kind: "intern" | "extern") => list.filter((t) => t.kind === kind);
+  return (
+    <Select id={id} className={className} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">{noneLabel}</option>
+      {(["intern", "extern"] as const).map(
+        (k) =>
+          group(k).length > 0 && (
+            <optgroup key={k} label={k === "intern" ? tr("Internal", "Intern") : tr("External", "Extern")}>
+              {group(k).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {txNow(t.title)}
+                </option>
+              ))}
+            </optgroup>
+          ),
+      )}
     </Select>
   );
 }

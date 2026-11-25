@@ -27,6 +27,8 @@ import type {
   OutreachDetail,
   Task,
   TaskDetail,
+  Topic,
+  TopicDetail,
   User,
 } from "./types";
 
@@ -43,12 +45,41 @@ export function useUserMap() {
 
 export const useHome = () => useQuery({ queryKey: ["home"], queryFn: () => api.get<HomeData>("/api/home"), refetchInterval: 120_000 });
 
-export type TaskFilter = { assignee?: string; status?: "open" | "done" | "all"; milestone?: string; contact?: string; q?: string };
+export type TaskFilter = { assignee?: string; status?: "open" | "done" | "all" | "waiting"; milestone?: string; topic?: string; contact?: string; q?: string };
 export const useTasks = (f: TaskFilter) =>
   useQuery({ queryKey: ["tasks", f], queryFn: () => api.get<Task[]>(`/api/tasks${qs(f)}`), placeholderData: keepPreviousData });
 
 export const useTask = (id: string | null) =>
   useQuery({ queryKey: ["task", id], queryFn: () => api.get<TaskDetail>(`/api/tasks/${id}`), enabled: !!id });
+
+export type TopicFilter = { kind?: "intern" | "extern"; state?: "open" | "closed" | "all" | "board"; owner?: string; area?: string; q?: string };
+export const useTopics = (f: TopicFilter = {}) =>
+  useQuery({ queryKey: ["topics", f], queryFn: () => api.get<Topic[]>(`/api/topics${qs(f)}`), placeholderData: keepPreviousData });
+export const useTopic = (id: string | null | undefined) =>
+  useQuery({ queryKey: ["topic", id], queryFn: () => api.get<TopicDetail>(`/api/topics/${id}`), enabled: !!id });
+export const useTopicAreas = () => useQuery({ queryKey: ["topics", "areas"], queryFn: () => api.get<string[]>("/api/topics/areas"), staleTime: 60_000 });
+
+/** Update a topic – optimistically in all topic lists (board drag & drop feels instant). */
+export function useUpdateTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Topic> }) => api.patch<Topic>(`/api/topics/${id}`, patch),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: ["topics"] });
+      const snapshots = qc.getQueriesData<Topic[]>({ queryKey: ["topics"] });
+      for (const [key, list] of snapshots) {
+        if (Array.isArray(list) && list.length && typeof list[0] === "object") qc.setQueryData(key, list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      }
+      return { snapshots };
+    },
+    onError: (_e, _v, ctx) => ctx?.snapshots.forEach(([k, v]) => qc.setQueryData(k, v)),
+    onSettled: (_d, _e, v) => {
+      qc.invalidateQueries({ queryKey: ["topics"] });
+      qc.invalidateQueries({ queryKey: ["topic", v.id] });
+      qc.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
 
 export const useMilestones = () => useQuery({ queryKey: ["milestones"], queryFn: () => api.get<Milestone[]>("/api/milestones") });
 export const useMilestone = (id: string | undefined) =>
@@ -184,7 +215,7 @@ export const useMailUnread = (enabled = true) =>
   });
 
 export function invalidateWork(qc: QueryClient) {
-  for (const k of ["tasks", "task", "home", "milestones", "milestone", "users", "contact", "contacts", "org", "orgs"]) qc.invalidateQueries({ queryKey: [k] });
+  for (const k of ["tasks", "task", "home", "milestones", "milestone", "topics", "topic", "users", "contact", "contacts", "org", "orgs"]) qc.invalidateQueries({ queryKey: [k] });
 }
 
 /** Update a task – optimistically in all lists. */

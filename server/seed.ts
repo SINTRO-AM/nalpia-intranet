@@ -224,6 +224,34 @@ export async function seedDemo(deps: Deps) {
   insOrgTask.run(newId(), "Send the investment agreement to Dr. Sommer", "Draft from the law firm, terms as in the term sheet.", u.denis, u.denis, d(3), "hoch", ms.preseed, og.sommer, 901, now, now);
   insOrgTask.run(newId(), "Compare QuoteStream pricing with alternatives", "", u.carlo, u.carlo, d(8), "mittel", ms.mvp, og.marketdata, 902, now, now);
 
+  // Topics (demo): internal and external matters in the pipeline, with some of the tasks above
+  const insTopic = db.prepare(
+    `INSERT INTO topics (id, title, description, kind, stage, area, owner_id, organization_id, counterpart, waiting_on, waiting_since, next_step, follow_up, due_date, sort_order, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const tp: Record<string, string> = {};
+  for (const [key, title, kind, stage, area, owner, org, counterpart, waitingOn, nextStep, follow, due] of [
+    ["exist", "EXIST start-up grant", "extern", "in_arbeit", "Funding", "denis", null, "University start-up service", "", "Confirm the mentor", 4, 40],
+    ["broker", "Broker integration (BrokerHub)", "extern", "wartet", "Partners", "carlo", "brokerhub", "", "Production API keys from BrokerHub", "Ask again on Monday", 2, 60],
+    ["preseed", "Pre-seed round", "extern", "in_arbeit", "Fundraising", "denis", null, "Business angels & pre-seed funds", "", "Partner meeting Isarvest", null, 75],
+    ["arch", "Architecture 2.0: monorepo and contracts", "intern", "geplant", "Tech", "carlo", null, "", "", "Write the RFC", null, 50],
+    ["brand", "Brand refresh for the launch", "intern", "idee", "Product", "leo", null, "", "", "", null, null],
+    ["mail", "Team mailboxes on Spacemail", "intern", "erledigt", "Infrastructure", "carlo", null, "", "", "", null, null],
+  ] as const) {
+    const id = newId();
+    tp[key] = id;
+    insTopic.run(
+      id, title, "", kind, stage, area, u[owner], org ? og[org] : null, counterpart, waitingOn, stage === "wartet" ? now - 6 * 86400_000 : null, nextStep,
+      follow === null ? null : d(follow), due === null ? null : d(due), Object.keys(tp).length * 1000, u.denis, now - 20 * 86400_000, now,
+    );
+  }
+  db.prepare("UPDATE topics SET closed_at = ? WHERE stage = 'erledigt'").run(now - 86400_000);
+  const linkTopic = db.prepare("UPDATE tasks SET topic_id = ? WHERE title = ?");
+  linkTopic.run(tp.exist, "Finish the EXIST financial plan");
+  linkTopic.run(tp.broker, "Paper trading: order routing through BrokerHub sandbox");
+  linkTopic.run(tp.mail, "Set up Spacemail mailboxes for the team");
+  for (const t of ["Send cap table and use of funds to Isarvest", "Align the investment agreement with the law firm", "Grant Northbridge data room access", "Send the investment agreement to Dr. Sommer"]) linkTopic.run(tp.preseed, t);
+
   const insNews = db.prepare("INSERT INTO news (id, author_id, title, body, category, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   const news = [
     [
