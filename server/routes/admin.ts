@@ -3,7 +3,7 @@ import { z } from "zod";
 import { toPublicUser, type AppEnv, type Ctx, type Deps, type UserRow } from "../context.js";
 import { getSetting, setSetting } from "../db/index.js";
 import { assertRecentAuth } from "../auth/middleware.js";
-import { assertEmailAllowed, getUser, getUserByEmail, invalidateAuthTokens, issueAuthToken, revokeSessions } from "../auth/service.js";
+import { assertEmailAllowed, getUser, getUserByEmail, invalidateAuthTokens, isEmailAllowed, issueAuthToken, revokeSessions } from "../auth/service.js";
 import { audit, notify } from "../lib/audit.js";
 import { deleteAvatar, readAvatarUpload, saveAvatar } from "../lib/avatar.js";
 import { importCrmBundle, parseCrmBundle, safeUrl } from "../lib/crm-import.js";
@@ -42,13 +42,19 @@ const newUser = z.object({
   title: zText(80).optional(),
   role: z.enum(["admin", "member"]).default("member"),
   sendEmail: z.boolean().optional(),
+  /** Admin override: invite an address outside ALLOWED_EMAIL_DOMAINS (needs a fresh password + code confirmation). */
+  external: z.boolean().optional(),
 });
 
 async function createInvite(c: Ctx, p: z.infer<typeof newUser>) {
   const deps = c.get("deps");
   const me = c.get("user");
   if (p.role === "admin") assertRecentAuth(c);
-  assertEmailAllowed(deps, p.email);
+  const external = !isEmailAllowed(deps, p.email);
+  if (external) {
+    if (!p.external) assertEmailAllowed(deps, p.email);
+    assertRecentAuth(c);
+  }
   if (getUserByEmail(deps, p.email)) throw new HttpError(409, tr(`An account for ${p.email} already exists.`, `Für ${p.email} gibt es bereits ein Konto.`), "exists");
   const id = newId();
   const now = Date.now();
@@ -76,7 +82,7 @@ async function createInvite(c: Ctx, p: z.infer<typeof newUser>) {
       console.error("[mailer] Invitation not sent:", (e as Error).message);
     }
   }
-  audit(deps.db, { userId: me.id, action: "user.invited", target: id, ip: c.get("ip"), meta: { email: p.email, role: p.role } });
+  audit(deps.db, { userId: me.id, action: "user.invited", target: id, ip: c.get("ip"), meta: { email: p.email, role: p.role, ...(external ? { external: true } : {}) } });
   return { user: adminView(deps, getUser(deps, id)!), inviteUrl: url, emailed };
 }
 

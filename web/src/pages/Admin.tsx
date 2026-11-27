@@ -254,19 +254,23 @@ function InviteSheet({ open, onOpenChange, smtp, domains, onDone }: { open: bool
   const [f, setF] = useState({ name: "", email: "", title: "", role: "member" as "member" | "admin" });
   const [bulk, setBulk] = useState("");
   const [sendEmail, setSendEmail] = useState(true);
+  const [external, setExternal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<Record<string, string>>({});
   const [results, setResults] = useState<{ name: string; email: string; url?: string; ok: boolean; message: string }[]>([]);
   const guarded = useGuarded();
+  const emailDomain = f.email.trim().toLowerCase().split("@")[1] ?? "";
+  const outside = mode === "single" && domains.length > 0 && emailDomain.includes(".") && !domains.includes(emailDomain);
 
   async function submit() {
     setBusy(true);
     setErr({});
     try {
       if (mode === "single") {
-        const r = await guarded(() => api.post<{ user: AdminUser; inviteUrl: string; emailed: boolean }>("/api/admin/users", { ...f, sendEmail }));
+        const r = await guarded(() => api.post<{ user: AdminUser; inviteUrl: string; emailed: boolean }>("/api/admin/users", { ...f, sendEmail, external: outside && external }));
         setResults([{ name: r.user.name, email: r.user.email, url: r.inviteUrl, ok: true, message: r.emailed ? tr("E-mail sent", "E-Mail versendet") : tr("Link ready", "Link bereit") }, ...results]);
         setF({ name: "", email: "", title: "", role: "member" });
+        setExternal(false);
       } else {
         const r = await api.post<{ results: { line: string; ok: boolean; message: string; inviteUrl?: string; email?: string }[] }>("/api/admin/users/bulk", { text: bulk, sendEmail });
         setResults(r.results.map((x) => ({ name: x.line, email: x.email ?? "", url: x.inviteUrl, ok: x.ok, message: x.message })));
@@ -314,6 +318,17 @@ function InviteSheet({ open, onOpenChange, smtp, domains, onDone }: { open: bool
           <Field label={tr("One person per line", "Eine Person pro Zeile")} hint={tr("Format: Name; e-mail; title – e.g. “Mira Hansen; mira@nalpia.com; Founding Engineer”", "Format: Name; E-Mail; Titel – z. B. „Alex Mense; am@sintro.eu; Account Manager“")}>
             <textarea className="field num min-h-[160px] text-[13.5px]" value={bulk} onChange={(e) => setBulk(e.target.value)} />
           </Field>
+        )}
+        {outside && (
+          <Switch
+            checked={external}
+            onChange={setExternal}
+            label={tr(`Invite ${emailDomain} address anyway`, `Adresse von ${emailDomain} trotzdem einladen`)}
+            description={tr(
+              `Outside the allowed domains (${domains.join(", ")}). You confirm with your password and code.`,
+              `Liegt außerhalb der erlaubten Domains (${domains.join(", ")}). Du bestätigst mit Passwort und Code.`,
+            )}
+          />
         )}
         {smtp ? (
           <Switch checked={sendEmail} onChange={setSendEmail} label={tr("Send invite by e-mail", "Einladung per E-Mail senden")} description={tr("Otherwise you get the link to copy.", "Sonst bekommst du den Link zum Kopieren.")} />

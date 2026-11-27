@@ -232,3 +232,26 @@ test("Language: x-lang header switches error messages (English default, German w
   assert.equal((await c.post("/api/tasks", { title: "" })).json.fields.title, "Bitte gib einen Titel ein.");
   assert.equal((await c.req("POST", "/api/tasks", { title: "" }, { "x-lang": "en" })).json.fields.title, "Please enter a title.");
 });
+
+test("Externe Adresse: nur mit ausdrücklicher Admin-Freigabe und frischer Bestätigung einladbar", async () => {
+  const { app, deps } = setup({ ALLOWED_EMAIL_DOMAINS: "nalpia.com" });
+  await addUser(deps, { email: "admin@nalpia.com", password: PW, role: "admin" });
+  const plain = new Client(app);
+  await plain.login("admin@nalpia.com", PW);
+  // Without the override, the domain rule applies as before.
+  const blocked = await plain.post("/api/admin/users", { email: "gast@partner.example", name: "Gast Extern" });
+  assert.equal(blocked.status, 422);
+  assert.equal(blocked.json.code, "domain_not_allowed");
+  // With the override but without fresh confirmation, the action must be confirmed (here: 2FA missing).
+  const unconfirmed = await plain.post("/api/admin/users", { email: "gast@partner.example", name: "Gast Extern", external: true });
+  assert.equal(unconfirmed.status, 403);
+  // Confirmed admin: invite works, link comes back, audit marks it as external.
+  const { client: admin } = await elevatedAdmin(app, deps, "admin@nalpia.com", PW);
+  const ok = await admin.post("/api/admin/users", { email: "gast@partner.example", name: "Gast Extern", external: true, sendEmail: false });
+  assert.equal(ok.status, 201, ok.text);
+  assert.match(ok.json.inviteUrl, /\/einladung|\/invite|token=/);
+  const row = deps.db.prepare("SELECT meta FROM audit_log WHERE action = 'user.invited' ORDER BY rowid DESC LIMIT 1").get() as { meta: string };
+  assert.equal(JSON.parse(row.meta).external, true);
+  // Domain addresses still need no override.
+  assert.equal((await admin.post("/api/admin/users", { email: "neu2@nalpia.com", name: "Neu Zwei" })).status, 201);
+});

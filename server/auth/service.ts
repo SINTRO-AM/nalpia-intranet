@@ -102,11 +102,16 @@ export function getUserByEmail(deps: Deps, email: string): UserRow | undefined {
   return deps.db.prepare("SELECT * FROM users WHERE email = ? COLLATE NOCASE").get(email.trim()) as UserRow | undefined;
 }
 
+/** True when ALLOWED_EMAIL_DOMAINS is empty or contains the address's domain. */
+export function isEmailAllowed(deps: Deps, email: string): boolean {
+  const domains = deps.config.allowedDomains;
+  if (!domains.length) return true;
+  return domains.includes(email.split("@")[1]?.toLowerCase() ?? "");
+}
+
 export function assertEmailAllowed(deps: Deps, email: string) {
   const domains = deps.config.allowedDomains;
-  if (!domains.length) return;
-  const domain = email.split("@")[1]?.toLowerCase() ?? "";
-  if (!domains.includes(domain)) {
+  if (!isEmailAllowed(deps, email)) {
     throw new HttpError(422, tr(`Only addresses from these domains are allowed: ${domains.join(", ")}`, `Nur Adressen dieser Domains sind erlaubt: ${domains.join(", ")}`), "domain_not_allowed");
   }
 }
